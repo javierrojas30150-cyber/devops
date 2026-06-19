@@ -110,6 +110,11 @@ jobs:
       #   run: |
       #     aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
 
+      # --- 5.5 DESPLEGAR INGRESS PÚBLICO SIN AUTENTICACIÓN ---
+      # - name: Aplicar Ingress Controller
+      #   run: |
+      #     kubectl apply -f infra/k8s/ingress.yml
+
       # --- 6. ACTUALIZAR DEPLOYMENTS CON LAS NUEVAS IMÁGENES ---
       # COMENTADO: El cluster EKS 'despachos-cluster' no existe aún
       

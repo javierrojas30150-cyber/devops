@@ -1,0 +1,38 @@
+# Ingress Controller - ALB sin autenticación (PÚBLICO)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: despacho-ingress
+  namespace: default
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    # SIN autenticación - PÚBLICO
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/tags: Project=innovatech,Environment=dev
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-despacho
+                port:
+                  number: 80
+          - path: /api/ventas/
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-ventas
+                port:
+                  number: 8080
+          - path: /api/despachos/
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-despacho
+                port:
+                  number: 8081
