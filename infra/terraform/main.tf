@@ -132,11 +132,6 @@ resource "aws_route_table_association" "private_2" {
 }
 
 # ============================================
-# NOTA: EKS Cluster requiere roles IAM que debe
-# crear el admin. Por ahora solo creamos VPC + ECR.
-# ============================================
-
-# ============================================
 # ECR REPOSITORIES
 # ============================================
 
@@ -159,6 +154,64 @@ resource "aws_ecr_repository" "frontend_despacho_repo" {
   image_scanning_configuration { scan_on_push = true }
   force_delete         = true
   tags = { Project = "innovatech" }
+}
+
+# ============================================
+# IAM ROLES FOR EKS CLUSTER (Using existing Lab Roles)
+# ============================================
+
+data "aws_iam_role" "eks_cluster" {
+  name = "c216581a5470593l15483883t1w548946-LabEksClusterRole-TvRXIo27d5Vg"
+}
+
+# ============================================
+# EKS CLUSTER
+# ============================================
+
+resource "aws_eks_cluster" "main" {
+  name     = "despachos-cluster"
+  role_arn = data.aws_iam_role.eks_cluster.arn
+  
+  vpc_config {
+    subnet_ids = [
+      aws_subnet.public_1.id,
+      aws_subnet.public_2.id,
+      aws_subnet.private_1.id,
+      aws_subnet.private_2.id
+    ]
+  }
+  
+  tags = { Name = "despachos-cluster" }
+}
+
+# ============================================
+# IAM ROLES FOR EKS NODE GROUP (Using existing Lab Roles)
+# ============================================
+
+data "aws_iam_role" "eks_nodes" {
+  name = "c216581a5470593l15483883t1w548946983-LabEksNodeRole-vAXlTVFpvzR1"
+}
+
+# ============================================
+# EKS NODE GROUP
+# ============================================
+
+resource "aws_eks_node_group" "main" {
+  cluster_name    = aws_eks_cluster.main.name
+  node_group_name = "despachos-nodes"
+  node_role_arn   = data.aws_iam_role.eks_nodes.arn
+  subnet_ids = [
+    aws_subnet.private_1.id,
+    aws_subnet.private_2.id
+  ]
+  
+  scaling_config {
+    desired_size = 2
+    min_size     = 1
+    max_size     = 3
+  }
+  
+  tags = { Name = "despachos-nodes" }
 }
 
 # ============================================
@@ -198,6 +251,21 @@ output "ecr_repositories" {
     backend_despacho = aws_ecr_repository.backend_despacho_repo.repository_url
     frontend         = aws_ecr_repository.frontend_despacho_repo.repository_url
   }
+}
+
+output "eks_cluster_name" {
+  description = "Nombre del cluster EKS"
+  value       = aws_eks_cluster.main.name
+}
+
+output "eks_cluster_arn" {
+  description = "ARN del cluster EKS"
+  value       = aws_eks_cluster.main.arn
+}
+
+output "eks_cluster_endpoint" {
+  description = "Endpoint del cluster EKS"
+  value       = aws_eks_cluster.main.endpoint
 }
 
 output "nat_gateway_ip" {

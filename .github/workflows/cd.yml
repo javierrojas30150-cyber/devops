@@ -141,6 +141,50 @@ jobs:
           kubectl apply -f infra/k8s/configmap-secrets.yml --validate=false
           echo "✅ ConfigMap y Secrets aplicados"
 
+      - name: Deploy MySQL
+        if: steps.kubeconfig.outputs.status == 'success'
+        continue-on-error: true
+        run: |
+          echo "📦 Desplegando MySQL..."
+          kubectl apply -f infra/k8s/mysql.yml --validate=false
+          echo "✅ MySQL desplegado"
+          echo "⏳ Esperando a que MySQL esté listo..."
+          kubectl wait --for=condition=ready pod -l app=mysql --timeout=300s --ignore-not-found=true
+          echo "✅ MySQL está listo"
+
+      - name: Deploy Backend Despacho
+        if: steps.kubeconfig.outputs.status == 'success'
+        continue-on-error: true
+        run: |
+          echo "📦 Desplegando Backend Despacho..."
+          kubectl apply -f infra/k8s/backend.yml --validate=false
+          echo "✅ Backend Despacho desplegado"
+          echo "⏳ Esperando a que Backend Despacho esté listo..."
+          kubectl wait --for=condition=ready pod -l app=backend-despacho --timeout=300s --ignore-not-found=true
+          echo "✅ Backend Despacho está listo"
+
+      - name: Deploy Backend Ventas
+        if: steps.kubeconfig.outputs.status == 'success'
+        continue-on-error: true
+        run: |
+          echo "📦 Desplegando Backend Ventas..."
+          kubectl apply -f infra/k8s/backend-ventas.yml --validate=false
+          echo "✅ Backend Ventas desplegado"
+          echo "⏳ Esperando a que Backend Ventas esté listo..."
+          kubectl wait --for=condition=ready pod -l app=backend-ventas --timeout=300s --ignore-not-found=true
+          echo "✅ Backend Ventas está listo"
+
+      - name: Deploy Frontend
+        if: steps.kubeconfig.outputs.status == 'success'
+        continue-on-error: true
+        run: |
+          echo "📦 Desplegando Frontend..."
+          kubectl apply -f infra/k8s/frontend.yml --validate=false
+          echo "✅ Frontend desplegado"
+          echo "⏳ Esperando a que Frontend esté listo..."
+          kubectl wait --for=condition=ready pod -l app=frontend-despacho --timeout=300s --ignore-not-found=true
+          echo "✅ Frontend está listo"
+
       - name: Desplegar Ingress PÚBLICO (sin autenticación)
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
