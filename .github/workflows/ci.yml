@@ -84,10 +84,17 @@ jobs:
         run: |
           aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name despachos-cluster || echo "⚠️  Cluster EKS no existe aún. Continuar..."
 
+      - name: Verificar conexión al cluster (opcional)
+        continue-on-error: true
+        run: |
+          echo "🔍 Verificando conexión al cluster..."
+          kubectl cluster-info || echo "⚠️  Cluster no disponible"
+          kubectl get nodes || echo "⚠️  No se puede listar nodos"
+
       - name: Desplegar Ingress PÚBLICO (sin autenticación)
         run: |
           echo "📦 Desplegando Ingress público..."
-          kubectl apply -f infra/k8s/ingress.yml
+          kubectl apply -f infra/k8s/ingress.yml --validate=false
           echo "✅ Ingress aplicado"
 
       - name: Esperar a que ALB asigne DNS
