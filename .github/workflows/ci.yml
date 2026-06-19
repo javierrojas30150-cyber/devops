@@ -1,5 +1,4 @@
-name: Integración Continua
-# Este workflow se encarga de ejecutar los tests del backend y frontend cada vez que se hace un push a la rama "devops". Si los tests pasan, se procede a construir las imágenes Docker, subirlas a ECR y actualizar los deployments en EKS.
+name: Integración Continua Completa
 on:
   push:
     branches:
@@ -7,14 +6,16 @@ on:
 
 env:
   AWS_REGION: us-east-1
+  EKS_CLUSTER_NAME: despachos-cluster
+  IMAGE_TAG: ${{ github.sha }}
 
 jobs:
-  # --- TRABAJO 1: TESTEAR EL BACKEND (JAVA) ---
+  # === TESTS ===
   backend-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-# --- 1. COMPILACIÓN DE AMBOS BACKENDS (JAVA/MAVEN) ---
+      
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -23,18 +24,19 @@ jobs:
           cache: 'maven'
 
       - name: Run Backend Tests (Despacho)
+        continue-on-error: true
         run: |
           cd back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
           chmod +x mvnw
-          ./mvnw test -DskipTests=false || echo "⚠️  Tests fallaron. Continuando con build..."
+          ./mvnw test -DskipTests=false
 
-      - name: Run Backend Tests (Venta)
+      - name: Run Backend Tests (Ventas)
+        continue-on-error: true
         run: |
           cd back-Ventas_SpringBoot/Springboot-API-REST
           chmod +x mvnw
-          ./mvnw test -DskipTests=false || echo "⚠️  Tests fallaron. Continuando con build..."
+          ./mvnw test -DskipTests=false
 
-  # --- TRABAJO 2: TESTEAR EL FRONTEND (REACT) ---
   frontend-tests:
     runs-on: ubuntu-latest
     steps:
@@ -43,31 +45,24 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '20'
           cache: 'npm'
           cache-dependency-path: './front_despacho/package-lock.json'
 
       - name: Install Dependencies
         run: |
           cd front_despacho
-          npm install
+          npm install --frozen-lockfile
 
-      # - name: Run Frontend Tests
-      #   run: |
-      #     cd front_despacho
-      #     CI=true npm test
-
-  # --- TRABAJO 3: DESPLEGAR INGRESS Y OBTENER URL PÚBLICA ---
-  deploy-ingress:
-    runs-on: ubuntu-latest
+  # === BUILD DE IMÁGENES DOCKER ===
+  build-and-push:
     needs: [backend-tests, frontend-tests]
-    continue-on-error: true
     if: always()
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout del código
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Configurar credenciales de AWS
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -75,55 +70,199 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Instalar kubectl
-        uses: azure/setup-kubectl@v3
-        with:
-          version: 'latest'
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Configurar kubeconfig para EKS
-        continue-on-error: true
-        id: kubeconfig
+      - name: Get Account ID
+        id: account
+        run: echo "account_id=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_OUTPUT
+
+      - name: Build and Push Backend Despacho
         run: |
-          echo "🔗 Configurando acceso a EKS cluster..."
-          if aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name despachos-cluster 2>&1; then
-            echo "✅ Kubeconfig configurado"
-            echo "status=success" >> $GITHUB_OUTPUT
+          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          docker build -t $ECR_REGISTRY/backend-despacho:${{ env.IMAGE_TAG }} \
+            -t $ECR_REGISTRY/backend-despacho:latest \
+            -f back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO/Dockerfile \
+            back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
+          docker push $ECR_REGISTRY/backend-despacho:${{ env.IMAGE_TAG }}
+          docker push $ECR_REGISTRY/backend-despacho:latest
+
+      - name: Build and Push Backend Ventas
+        run: |
+          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          docker build -t $ECR_REGISTRY/backend-ventas:${{ env.IMAGE_TAG }} \
+            -t $ECR_REGISTRY/backend-ventas:latest \
+            -f back-Ventas_SpringBoot/Springboot-API-REST/Dockerfile \
+            back-Ventas_SpringBoot/Springboot-API-REST
+          docker push $ECR_REGISTRY/backend-ventas:${{ env.IMAGE_TAG }}
+          docker push $ECR_REGISTRY/backend-ventas:latest
+
+      - name: Build and Push Frontend
+        run: |
+          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          docker build -t $ECR_REGISTRY/frontend-despacho:${{ env.IMAGE_TAG }} \
+            -t $ECR_REGISTRY/frontend-despacho:latest \
+            -f front_despacho/Dockerfile \
+            front_despacho
+          docker push $ECR_REGISTRY/frontend-despacho:${{ env.IMAGE_TAG }}
+          docker push $ECR_REGISTRY/frontend-despacho:latest
+
+      - name: Save Account ID
+        run: echo "${{ steps.account.outputs.account_id }}" > account_id.txt
+
+      - name: Upload Account ID
+        uses: actions/upload-artifact@v4
+        with:
+          name: account-id
+          path: account_id.txt
+
+  # === DEPLOY A EKS ===
+  deploy-to-eks:
+    needs: build-and-push
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup kubectl and Helm
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Update kubeconfig
+        id: kubeconfig
+        continue-on-error: true
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}
+          echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: Download Account ID
+        uses: actions/download-artifact@v4
+        with:
+          name: account-id
+
+      - name: Get Account ID
+        id: account
+        run: echo "account_id=$(cat account_id.txt)" >> $GITHUB_OUTPUT
+
+      - name: Create/Update ConfigMap and Secrets
+        if: steps.kubeconfig.outputs.status == 'success'
+        continue-on-error: true
+        run: |
+          kubectl apply -f infra/k8s/configmap-secrets.yml || echo "⚠️  ConfigMap/Secrets actualizado"
+
+      - name: Deploy MySQL
+        if: steps.kubeconfig.outputs.status == 'success'
+        continue-on-error: true
+        run: |
+          kubectl apply -f infra/k8s/mysql.yml
+
+      - name: Deploy Backend Despacho
+        if: steps.kubeconfig.outputs.status == 'success'
+        continue-on-error: true
+        run: |
+          sed -e "s|\${ACCOUNT_ID}|${{ steps.account.outputs.account_id }}|g" \
+              -e "s|\${AWS_REGION}|${{ env.AWS_REGION }}|g" \
+              -e "s|\${IMAGE_TAG}|${{ env.IMAGE_TAG }}|g" \
+              infra/k8s/backend.yml | kubectl apply -f -
+          echo "✅ Backend Despacho desplegado"
+
+      - name: Deploy Backend Ventas
+        if: steps.kubeconfig.outputs.status == 'success'
+        continue-on-error: true
+        run: |
+          sed -e "s|\${ACCOUNT_ID}|${{ steps.account.outputs.account_id }}|g" \
+              -e "s|\${AWS_REGION}|${{ env.AWS_REGION }}|g" \
+              -e "s|\${IMAGE_TAG}|${{ env.IMAGE_TAG }}|g" \
+              infra/k8s/backend-ventas.yml | kubectl apply -f -
+          echo "✅ Backend Ventas desplegado"
+
+      - name: Deploy Frontend
+        if: steps.kubeconfig.outputs.status == 'success'
+        continue-on-error: true
+        run: |
+          sed -e "s|\${ACCOUNT_ID}|${{ steps.account.outputs.account_id }}|g" \
+              -e "s|\${AWS_REGION}|${{ env.AWS_REGION }}|g" \
+              -e "s|\${IMAGE_TAG}|${{ env.IMAGE_TAG }}|g" \
+              infra/k8s/frontend.yml | kubectl apply -f -
+          echo "✅ Frontend desplegado"
+
+      - name: Install AWS Load Balancer Controller
+        if: steps.kubeconfig.outputs.status == 'success'
+        continue-on-error: true
+        run: |
+          if ! kubectl get deployment -n kube-system aws-load-balancer-controller &>/dev/null; then
+            echo "📦 Instalando AWS Load Balancer Controller..."
+            helm repo add eks https://aws.github.io/eks-charts
+            helm repo update
+            helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
+              -n kube-system \
+              --set clusterName=${{ env.EKS_CLUSTER_NAME }} \
+              --set serviceAccount.create=true \
+              --wait --timeout 5m || true
+            sleep 10
           else
-            echo "⚠️  Cluster EKS no disponible"
-            echo "status=failed" >> $GITHUB_OUTPUT
-            exit 0
+            echo "✅ AWS Load Balancer Controller ya existe"
           fi
 
-      - name: Verificar conexión al cluster (opcional)
+      - name: Deploy Ingress
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          echo "🔍 Verificando conexión al cluster..."
-          kubectl cluster-info || echo "⚠️  Cluster no disponible"
+          kubectl apply -f infra/k8s/ingress.yml
+          echo "✅ Ingress desplegado"
 
-      - name: Desplegar Ingress PÚBLICO (sin autenticación)
+      - name: Wait for ALB DNS
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          echo "📦 Desplegando Ingress público..."
-          kubectl apply -f infra/k8s/ingress.yml --validate=false
-          echo "✅ Ingress aplicado"
-
-      - name: Esperar a que ALB asigne DNS
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
-        run: |
-          echo "⏳ Esperando a que AWS asigne la URL del ALB..."
-          for i in {1..30}; do
-            FRONTEND_URL=$(kubectl get ingress despacho-ingress -n default -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
-            if [ -n "$FRONTEND_URL" ]; then
-              echo "✅ URL PÚBLICA (SIN CONTRASEÑA): http://$FRONTEND_URL"
-              echo "🎉 La aplicación está disponible públicamente"
+          echo "⏳ Esperando DNS del ALB..."
+          for i in {1..60}; do
+            URL=$(kubectl get ingress despacho-ingress -n default -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+            if [ -n "$URL" ]; then
+              echo ""
+              echo "╔════════════════════════════════════════════════════════════╗"
+              echo "║         🎉 ¡APLICACIÓN DESPLEGADA EXITOSAMENTE! 🎉         ║"
+              echo "╠════════════════════════════════════════════════════════════╣"
+              echo "║                                                            ║"
+              echo "║  URL PÚBLICA: http://$URL"
+              echo "║                                                            ║"
+              echo "║  📊 API Despachos: http://$URL/api/despachos/"
+              echo "║  📊 API Ventas:    http://$URL/api/ventas/"
+              echo "║  🎨 Frontend:      http://$URL"
+              echo "║                                                            ║"
+              echo "╚════════════════════════════════════════════════════════════╝"
+              echo ""
               exit 0
             fi
-            echo "⏳ Intento $i/30 - esperando..."
+            echo "⏳ Intento $i/60..."
             sleep 10
           done
-          echo "⚠️  Timeout esperando URL del ALB. Intenta en unos minutos:"
-          echo "   kubectl get ingress despacho-ingress -n default -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'"
-          exit 0
+          echo "⚠️  Timeout esperando DNS."
+          echo "Verifica con: kubectl get ingress despacho-ingress -n default -o wide"
+
+      - name: Show Cluster Status
+        if: steps.kubeconfig.outputs.status == 'success'
+        continue-on-error: true
+        run: |
+          echo "═══════ ESTADO DEL CLUSTER ═══════"
+          echo ""
+          echo "Pods desplegados:"
+          kubectl get pods -n default
+          echo ""
+          echo "Servicios:"
+          kubectl get svc -n default
+          echo ""
+          echo "Ingress:"
+          kubectl get ingress -n default
