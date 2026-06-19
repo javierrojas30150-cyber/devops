@@ -81,14 +81,15 @@ jobs:
         run: |
           aws eks update-kubeconfig --region us-east-1 --name despachos-cluster || echo "⚠️  Cluster EKS 'despachos-cluster' no existe aún. Continuar..."
 
-      - name: Obtener URL del Frontend (LoadBalancer)
+      - name: Obtener URL del Frontend
         run: |
-          echo "======================================"
-          echo "🚀 INFORMACIÓN DEL FRONTEND"
-          echo "======================================"
-          kubectl get svc frontend-despacho 2>/dev/null || echo "⚠️  Cluster no accesible. Deploy manual necesario."
-          echo ""
-          echo "📍 URL del Frontend:"
-          kubectl get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "⏳ Buscando dirección... Cluster aún no configurado"
-          echo ""
-          echo "======================================"
+          if kubectl get service frontend-despacho -n default 2>/dev/null | grep -q frontend-despacho; then
+            FRONTEND_URL=$(kubectl get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+            if [ -n "$FRONTEND_URL" ]; then
+              echo "Frontend: http://$FRONTEND_URL"
+            else
+              echo "LoadBalancer asignando IP..."
+            fi
+          else
+            echo "Cluster no configurado - Frontend en ECR: 554894698368.dkr.ecr.us-east-1.amazonaws.com/frontend-despacho"
+          fi
