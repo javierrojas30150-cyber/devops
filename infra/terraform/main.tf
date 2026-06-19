@@ -132,6 +132,45 @@ resource "aws_route_table_association" "private_2" {
 }
 
 # ============================================
+# SECURITY GROUP PARA ALB - PÚBLICO SIN RESTRICCIONES
+# ============================================
+
+resource "aws_security_group" "alb_public" {
+  name        = "despacho-alb-public"
+  description = "Security group for ALB public access"
+  vpc_id      = aws_vpc.main.id
+
+  # Permitir HTTP desde cualquier dirección
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow HTTP from anywhere"
+  }
+
+  # Permitir HTTPS desde cualquier dirección (por si acaso)
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow HTTPS from anywhere"
+  }
+
+  # Permitir tráfico saliente
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
+  }
+
+  tags = { Name = "despacho-alb-public-sg" }
+}
+
+# ============================================
 # ECR REPOSITORIES
 # ============================================
 
