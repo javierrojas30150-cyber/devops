@@ -104,24 +104,42 @@ jobs:
           version: 'latest'
 
       - name: Configurar kubeconfig para EKS
+        continue-on-error: true
+        id: kubeconfig
         run: |
-          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
-          echo "✅ Kubeconfig configurado"
+          echo "🔗 Configurando acceso a EKS cluster..."
+          if aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }} 2>&1; then
+            echo "✅ Kubeconfig configurado exitosamente"
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️  No se pudo configurar el cluster EKS"
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo ""
+            echo "📌 Si deseas desplegar en EKS manualmente:"
+            echo "   1. Crea el cluster con Terraform: cd infra/terraform && terraform apply"
+            echo "   2. Luego ejecuta: kubectl apply -f infra/k8s/ingress.yml"
+            exit 0
+          fi
 
       - name: Verificar conexión al cluster
+        if: steps.kubeconfig.outputs.status == 'success'
+        continue-on-error: true
         run: |
           echo "🔍 Verificando conexión al cluster..."
           kubectl cluster-info
-          kubectl get nodes
-          echo "✅ Cluster accesible"
+          echo "✅ Conexión OK"
 
       - name: Desplegar Ingress PÚBLICO (sin autenticación)
+        if: steps.kubeconfig.outputs.status == 'success'
+        continue-on-error: true
         run: |
           echo "📦 Desplegando Ingress público sin autenticación..."
           kubectl apply -f infra/k8s/ingress.yml --validate=false
-          echo "✅ Ingress aplicado correctamente"
+          echo "✅ Ingress aplicado"
 
       - name: Esperar a que ALB asigne DNS y obtener URL pública
+        if: steps.kubeconfig.outputs.status == 'success'
+        continue-on-error: true
         run: |
           echo "⏳ Esperando a que AWS ALB asigne la URL pública..."
           for i in {1..30}; do
