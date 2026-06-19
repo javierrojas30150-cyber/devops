@@ -97,6 +97,41 @@ jobs:
           docker push --all-tags $REPO
           echo "image=$REPO:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      
-      
-       
+      # --- 5. CONFIGURAR KUBECTL Y DESPLEGAR INGRESS PÚBLICO ---
+      - name: Instalar kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Configurar kubeconfig para EKS
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+
+      - name: Desplegar Ingress PÚBLICO (sin autenticación)
+        run: |
+          echo "📦 Desplegando Ingress público sin autenticación..."
+          kubectl apply -f infra/k8s/ingress.yml
+          echo "✅ Ingress aplicado correctamente"
+
+      - name: Esperar a que ALB asigne DNS y obtener URL pública
+        run: |
+          echo "⏳ Esperando a que AWS ALB asigne la URL pública..."
+          for i in {1..30}; do
+            FRONTEND_URL=$(kubectl get ingress despacho-ingress -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+            if [ -n "$FRONTEND_URL" ]; then
+              echo "✅ URL PÚBLICA DISPONIBLE (SIN CONTRASEÑA):"
+              echo "   http://$FRONTEND_URL"
+              echo ""
+              echo "🎉 La aplicación Despacho está lista para usar"
+              echo "   - Frontend: http://$FRONTEND_URL"
+              echo "   - API Ventas: http://$FRONTEND_URL/api/ventas/"
+              echo "   - API Despachos: http://$FRONTEND_URL/api/despachos/"
+              exit 0
+            fi
+            echo "   Intento $i/30..."
+            sleep 5
+          done
+          echo "⚠️  Timeout esperando URL del ALB. AWS puede tardar hasta 5 minutos."
+          echo "Intenta manualmente:"
+          echo "   kubectl get ingress despacho-ingress -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'"
+          exit 0
