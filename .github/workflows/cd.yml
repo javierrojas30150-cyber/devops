@@ -62,12 +62,19 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Obtener AWS Account ID
+        id: get-account-id
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
+          echo "AWS_ACCOUNT_ID=$ACCOUNT_ID" >> $GITHUB_ENV
+
       # --- 4. BUILD, TAG Y PUSH DE IMÁGENES (con versión = SHA del commit) ---
       - name: Build y Push Ventas Backend
         id: build-ventas
         run: |
           IMAGE_TAG=${{ github.sha }}
-          REPO=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/backend-ventas
+          REPO=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/backend-ventas
           docker build --platform linux/amd64 -t $REPO:$IMAGE_TAG -t $REPO:latest ./back-Ventas_SpringBoot/Springboot-API-REST
           docker push --all-tags $REPO
           echo "image=$REPO:$IMAGE_TAG" >> $GITHUB_OUTPUT
@@ -76,7 +83,7 @@ jobs:
         id: build-despacho
         run: |
           IMAGE_TAG=${{ github.sha }}
-          REPO=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/backend-despacho
+          REPO=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/backend-despacho
           docker build --platform linux/amd64 -t $REPO:$IMAGE_TAG -t $REPO:latest ./back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
           docker push --all-tags $REPO
           echo "image=$REPO:$IMAGE_TAG" >> $GITHUB_OUTPUT
@@ -85,7 +92,7 @@ jobs:
         id: build-frontend
         run: |
           IMAGE_TAG=${{ github.sha }}
-          REPO=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/frontend-despacho
+          REPO=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/frontend-despacho
           docker build --platform linux/amd64 -t $REPO:$IMAGE_TAG -t $REPO:latest ./front_despacho
           docker push --all-tags $REPO
           echo "image=$REPO:$IMAGE_TAG" >> $GITHUB_OUTPUT
