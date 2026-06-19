@@ -7,20 +7,20 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  CLUSTER: innovatech-cluster
-  SERVICE: app
+  CLUSTER_NAME: despachos-cluster   # Nombre del clúster EKS (definido en Terraform)
+  NAMESPACE: default
 
 jobs:
-  devops:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout del código
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # --- 1. COMPILACIÓN DE AMBOS BACKENDS (JAVA/MAVEN) ---
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -28,21 +28,20 @@ jobs:
 
       - name: Build Backends JARs
         run: |
-          # Compilar backend de Despachos
           cd back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
           chmod +x mvnw
           ./mvnw clean package -DskipTests
-          
-          # Compilar backend de Ventas
           cd ../../back-Ventas_SpringBoot/Springboot-API-REST
           chmod +x mvnw
           ./mvnw clean package -DskipTests
 
       # --- 2. COMPILACIÓN DEL FRONTEND (NODE/VITE) ---
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: './front_despacho/package-lock.json'
 
       - name: Build Frontend Production
         run: |
@@ -50,47 +49,70 @@ jobs:
           npm install
           npm run build
 
-      # --- 3. CONFIGURACIÓN DE CREDENCIALES DE AWS ---
-      - name: Configurar las credenciales de AWS
-        uses: aws-actions/configure-aws-credentials@v2
+      # --- 3. CONFIGURACIÓN DE CREDENCIALES DE AWS (usando rol IAM) ---
+      - name: Configurar credenciales de AWS
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
           aws-region: ${{ env.AWS_REGION }}
-      
+          # Si no tienes el rol, descomenta las siguientes líneas y comenta la de role-to-assume
+          # aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          # aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          # aws-region: ${{ env.AWS_REGION }}
+
       - name: Login en ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # --- 4. BUILD Y PUSH DOCKER: BACKEND VENTAS ---
+      # --- 4. BUILD, TAG Y PUSH DE IMÁGENES (con versión = SHA del commit) ---
       - name: Build y Push Ventas Backend
+        id: build-ventas
         run: |
-          docker build --platform linux/amd64 \
-          -t ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/innovatech-ventas-backend:latest \
-          ./back-Ventas_SpringBoot/Springboot-API-REST
-          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/innovatech-ventas-backend:latest
+          IMAGE_TAG=${{ github.sha }}
+          REPO=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/backend-ventas
+          docker build --platform linux/amd64 -t $REPO:$IMAGE_TAG -t $REPO:latest ./back-Ventas_SpringBoot/Springboot-API-REST
+          docker push --all-tags $REPO
+          echo "image=$REPO:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      # --- 5. BUILD Y PUSH DOCKER: BACKEND DESPACHOS ---
       - name: Build y Push Despacho Backend
+        id: build-despacho
         run: |
-          docker build --platform linux/amd64 \
-          -t ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/innovatech-despacho-backend:latest \
-          ./back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
-          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/innovatech-despacho-backend:latest
+          IMAGE_TAG=${{ github.sha }}
+          REPO=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/backend-despacho
+          docker build --platform linux/amd64 -t $REPO:$IMAGE_TAG -t $REPO:latest ./back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
+          docker push --all-tags $REPO
+          echo "image=$REPO:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      # --- 6. BUILD Y PUSH DOCKER: FRONTEND ---
       - name: Build y Push Frontend
+        id: build-frontend
         run: |
-          docker build --platform linux/amd64 \
-          -t ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/innovatech-frontend:latest \
-          ./front_despacho
-          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/innovatech-frontend:latest
+          IMAGE_TAG=${{ github.sha }}
+          REPO=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/frontend-despacho
+          docker build --platform linux/amd64 -t $REPO:$IMAGE_TAG -t $REPO:latest ./front_despacho
+          docker push --all-tags $REPO
+          echo "image=$REPO:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      # --- 7. REDESPLIEGUE EN ECS ---
-      - name: Forzar redespliegue en ECS
+      # --- 5. CONFIGURAR KUBECTL PARA ACCEDER AL CLUSTER EKS ---
+      - name: Instalar kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Configurar kubeconfig para EKS
         run: |
-          aws ecs update-service \
-          --cluster ${{ env.CLUSTER }} \
-          --service ${{ env.SERVICE }} \
-          --force-new-deployment
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+
+      # --- 6. ACTUALIZAR DEPLOYMENTS CON LAS NUEVAS IMÁGENES ---
+      - name: Actualizar imágenes en los deployments
+        run: |
+          kubectl set image deployment/backend-ventas   backend-ventas=${{ steps.build-ventas.outputs.image }} -n ${{ env.NAMESPACE }}
+          kubectl set image deployment/backend-despacho backend-despacho=${{ steps.build-despacho.outputs.image }} -n ${{ env.NAMESPACE }}
+          kubectl set image deployment/frontend-despacho frontend-despacho=${{ steps.build-frontend.outputs.image }} -n ${{ env.NAMESPACE }}
+
+      # --- 7. VERIFICAR QUE EL ROLLOUT SEA EXITOSO ---
+      - name: Verificar estado del rollout
+        run: |
+          kubectl rollout status deployment/backend-ventas   -n ${{ env.NAMESPACE }} --timeout=5m
+          kubectl rollout status deployment/backend-despacho -n ${{ env.NAMESPACE }} --timeout=5m
+          kubectl rollout status deployment/frontend-despacho -n ${{ env.NAMESPACE }} --timeout=5m

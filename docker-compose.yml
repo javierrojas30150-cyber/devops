@@ -1,161 +1,106 @@
-# Docker Compose version 3.8 - soporta todas las características modernas de Docker
 version: '3.8'
 
-# Definición de todos los servicios que se ejecutarán
 services:
-  # Servicio de base de datos MySQL versión 8
-  # Este servicio proporciona la base de datos para ambas aplicaciones backend
   mysql:
-    # Usa la imagen oficial de MySQL versión 8
-    image: mysql:8
-    # Variables de entorno para configurar MySQL
+    image: mysql:8.0.35
     environment:
-      # Contraseña del usuario root - se carga desde el archivo .env
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
-      # Nombre de la base de datos que se crea automáticamente
       MYSQL_DATABASE: ${DB_NAME}
-    # Mapeo de puertos: <puerto-host>:<puerto-contenedor>
-    # Permite conectar a MySQL desde localhost:3306
     ports:
-      - "3306:3306"
-    # Volúmenes persistentes - los datos se guardan aunque el contenedor se elimine
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-    # Red personalizada para comunicación entre contenedores
     networks:
       - app-network
-    # Configuración de logs con límite de tamaño para evitar saturar el disco
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-    # Health check verifica si el servicio está saludable
-    # Si falla, Docker sabe que el servicio no está listo
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # Servicio Backend de Ventas - API REST en Spring Boot
-  # Maneja toda la lógica de negocio relacionada con ventas
   backend-ventas:
-    # Construye la imagen desde el Dockerfile en el directorio especificado
     build: ./back-Ventas_SpringBoot/Springboot-API-REST
-    # Nombre y versión de la imagen que se genera
     image: ventas-backend:1.0
-    # Mapeo de puertos: <puerto-host>:<puerto-contenedor>
-    # La aplicación escucha en el puerto 8080 dentro del contenedor
     ports:
       - "8080:8080"
-    # Variables de entorno que necesita la aplicación
     environment:
-      # Host de la base de datos (nombre del servicio MySQL en la red)
       DB_ENDPOINT: mysql
-      # Puerto de la base de datos
       DB_PORT: 3306
-      # Nombre de la base de datos
       DB_NAME: ${DB_NAME}
-      # Usuario de la base de datos
       DB_USERNAME: root
-      # Contraseña de la base de datos
       DB_PASSWORD: ${DB_PASSWORD}
-    # Red personalizada para que los servicios se comuniquen entre sí
     networks:
       - app-network
-    # Configuración de logs con límite de tamaño para evitar saturar el disco
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-    # Este servicio espera hasta que MySQL esté saludable antes de iniciar
     depends_on:
       mysql:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # Servicio Backend de Despachos - API REST en Spring Boot
-  # Maneja toda la lógica de negocio relacionada con despachos
-  backend-despachos:
-    # Construye la imagen desde el Dockerfile en el directorio especificado
+  backend-despacho:   # antes backend-despachos
     build: ./back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
-    # Nombre y versión de la imagen que se genera
     image: despachos-backend:1.0
-    # Mapeo de puertos: <puerto-host>:<puerto-contenedor>
-    # La aplicación escucha en el puerto 8081 dentro del contenedor
     ports:
       - "8081:8081"
-    # Variables de entorno que necesita la aplicación
     environment:
-      # Host de la base de datos (nombre del servicio MySQL en la red)
       DB_ENDPOINT: mysql
-      # Puerto de la base de datos
       DB_PORT: 3306
-      # Nombre de la base de datos
       DB_NAME: ${DB_NAME}
-      # Usuario de la base de datos
       DB_USERNAME: root
-      # Contraseña de la base de datos
       DB_PASSWORD: ${DB_PASSWORD}
-    # Red personalizada para que los servicios se comuniquen entre sí
     networks:
       - app-network
-    # Configuración de logs con límite de tamaño para evitar saturar el disco
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-    # Este servicio espera hasta que MySQL esté saludable antes de iniciar
     depends_on:
       mysql:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # Servicio Frontend - Aplicación React con Vite
-  # Proporciona la interfaz de usuario para la aplicación
   frontend:
-    # Construye la imagen desde el Dockerfile en el directorio del frontend
     build: ./front_despacho
-    # Nombre y versión de la imagen que se genera
     image: despacho-frontend:1.0
-    # Mapeo de puertos: <puerto-host>:<puerto-contenedor>
-    # La aplicación se accede desde localhost:3000
     ports:
       - "3000:8080"
-    # Variables de entorno para configurar conexiones a los backends
     environment:
-      # Host del backend de ventas para las llamadas API
-      BACKEND_HOST: backend-ventas
-      # Host del backend de despachos para las llamadas API
-      BACKEND_HOST_DESPACHOS: backend-despachos
-    # Red personalizada para que los servicios se comuniquen entre sí
+      BACKEND_HOST: backend-ventas:8080
+      BACKEND_HOST_DESPACHOS: backend-despacho:8081   # actualizado
     networks:
       - app-network
-    # Configuración de logs con límite de tamaño para evitar saturar el disco
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-    # Este servicio espera hasta que los backends estén disponibles
     depends_on:
-      - backend-ventas
-      - backend-despachos
+      backend-ventas:
+        condition: service_healthy
+      backend-despacho:
+        condition: service_healthy
 
-# Definición de redes personalizadas
-# Las redes permiten que los contenedores se comuniquen entre sí por nombre
 networks:
-  # Red principal de la aplicación
-  # Todos los servicios están conectados a esta red
-  # Permite resolver nombres de servicios automáticamente (ej: mysql, backend-ventas)
   app-network:
     driver: bridge
 
-# Definición de volúmenes persistentes
-# Los volúmenes guardan datos incluso cuando los contenedores se detienen o se eliminan
 volumes:
-  # Volumen para los datos de MySQL
-  # Mapea /var/lib/mysql dentro del contenedor a mysql_data en el host
-  # Garantiza que los datos de la base de datos se persistan
   mysql_data:

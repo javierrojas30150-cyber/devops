@@ -1,24 +1,16 @@
-#Despliegue
-#configuraciones de la imagen:
-
-#Nombre y versión de mi proyecto:
+# Despliegue MySQL
 apiVersion: apps/v1
-#Tipo de recurso:
 kind: Deployment
-
 metadata:
   name: mysql
-
-#aquí comienzan las configuraciones:
+  labels:
+    app: mysql
+    environment: dev
 spec:
-  #Cantidad de pods que quiero mantener activos
   replicas: 1
-
-  #aquí sabe para quién son las réplicas
   selector:
     matchLabels:
       app: mysql
-
   template:
     metadata:
       labels:
@@ -26,7 +18,7 @@ spec:
     spec:
       containers:
         - name: mysql
-          image: mysql:8.0
+          image: mysql:8.0.35   # Versión fija para reproducibilidad
           ports:
             - containerPort: 3306
           env:
@@ -37,19 +29,43 @@ spec:
                   key: DB_PASSWORD
             - name: MYSQL_DATABASE
               value: despachos
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          livenessProbe:
+            exec:
+              command:
+                - mysqladmin
+                - ping
+                - -h
+                - localhost
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - mysqladmin
+                - ping
+                - -h
+                - localhost
+            initialDelaySeconds: 20
+            periodSeconds: 5
 ---
-#Servicio
+# Servicio MySQL
 apiVersion: v1
 kind: Service
 metadata:
   name: mysql
-
-#comienza la configuración:
+  labels:
+    app: mysql
 spec:
   selector:
     app: mysql
   ports:
     - port: 3306
       targetPort: 3306
-  #ClusterIP: solamente es accesible dentro del cluster kubernet
   type: ClusterIP

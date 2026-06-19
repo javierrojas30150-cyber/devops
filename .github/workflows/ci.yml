@@ -55,10 +55,6 @@ jobs:
       - name: Run Frontend Tests
         run: |
           cd front_despacho
-          # Nota: En entornos de CI (como GitHub Actions), el comando 'npm test' de React suele quedarse escuchando cambios (watch mode). 
-          # Añadimos CI=true para que corra los tests una vez y termine el proceso.
           CI=true npm test
 
-      - name: Obtener dirección del Load Balancer
-        run: |
-          kubectl get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "Buscando dirección..."
+    
