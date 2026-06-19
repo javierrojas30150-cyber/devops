@@ -98,25 +98,32 @@ jobs:
           echo "image=$REPO:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
       # --- 5. CONFIGURAR KUBECTL PARA ACCEDER AL CLUSTER EKS ---
-      - name: Instalar kubectl
-        uses: azure/setup-kubectl@v3
-        with:
-          version: 'latest'
+      # COMENTADO: El cluster EKS 'despachos-cluster' no existe aún
+      # Para habilitarlo, primero crea el cluster con Terraform o AWS Console
+      
+      # - name: Instalar kubectl
+      #   uses: azure/setup-kubectl@v3
+      #   with:
+      #     version: 'latest'
 
-      - name: Configurar kubeconfig para EKS
-        run: |
-          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+      # - name: Configurar kubeconfig para EKS
+      #   run: |
+      #     aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
 
       # --- 6. ACTUALIZAR DEPLOYMENTS CON LAS NUEVAS IMÁGENES ---
-      - name: Actualizar imágenes en los deployments
-        run: |
-          kubectl set image deployment/backend-ventas   backend-ventas=${{ steps.build-ventas.outputs.image }} -n ${{ env.NAMESPACE }}
-          kubectl set image deployment/backend-despacho backend-despacho=${{ steps.build-despacho.outputs.image }} -n ${{ env.NAMESPACE }}
-          kubectl set image deployment/frontend-despacho frontend-despacho=${{ steps.build-frontend.outputs.image }} -n ${{ env.NAMESPACE }}
+      # COMENTADO: El cluster EKS 'despachos-cluster' no existe aún
+      
+      # - name: Actualizar imágenes en los deployments
+      #   run: |
+      #     kubectl set image deployment/backend-ventas   backend-ventas=${{ steps.build-ventas.outputs.image }} -n ${{ env.NAMESPACE }}
+      #     kubectl set image deployment/backend-despacho backend-despacho=${{ steps.build-despacho.outputs.image }} -n ${{ env.NAMESPACE }}
+      #     kubectl set image deployment/frontend-despacho frontend-despacho=${{ steps.build-frontend.outputs.image }} -n ${{ env.NAMESPACE }}
 
       # --- 7. VERIFICAR QUE EL ROLLOUT SEA EXITOSO ---
-      - name: Verificar estado del rollout
-        run: |
-          kubectl rollout status deployment/backend-ventas   -n ${{ env.NAMESPACE }} --timeout=5m
-          kubectl rollout status deployment/backend-despacho -n ${{ env.NAMESPACE }} --timeout=5m
-          kubectl rollout status deployment/frontend-despacho -n ${{ env.NAMESPACE }} --timeout=5m
+      # COMENTADO: El cluster EKS 'despachos-cluster' no existe aún
+      
+      # - name: Verificar estado del rollout
+      #   run: |
+      #     kubectl rollout status deployment/backend-ventas   -n ${{ env.NAMESPACE }} --timeout=5m
+      #     kubectl rollout status deployment/backend-despacho -n ${{ env.NAMESPACE }} --timeout=5m
+      #     kubectl rollout status deployment/frontend-despacho -n ${{ env.NAMESPACE }} --timeout=5m
