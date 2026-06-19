@@ -104,7 +104,7 @@ metadata:
   labels:
     app: frontend-despacho
   annotations:
-    description: "Service para frontend del Despacho App - Accesible solo dentro del cluster"
+    description: "Service para frontend del Despacho App - Accesible públicamente via LoadBalancer"
 spec:
   selector:
     app: frontend-despacho
@@ -113,5 +113,5 @@ spec:
       port: 80
       targetPort: http
       protocol: TCP
-  type: ClusterIP
+  type: LoadBalancer
   sessionAffinity: None

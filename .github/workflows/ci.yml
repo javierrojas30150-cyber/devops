@@ -262,8 +262,8 @@ jobs:
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          echo "⏳ Esperando DNS del ALB..."
-          for i in {1..60}; do
+          echo "⏳ Esperando DNS del ALB (60 segundos)..."
+          for i in {1..6}; do
             URL=$(kubectl get ingress despacho-ingress -n default -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
             if [ -n "$URL" ]; then
               echo ""
@@ -281,7 +281,7 @@ jobs:
               echo ""
               exit 0
             fi
-            echo "⏳ Intento $i/60..."
+            echo "⏳ Intento $i/6..."
             sleep 10
           done
           echo "⚠️  Timeout esperando DNS."
@@ -310,7 +310,7 @@ jobs:
           echo ""
           kubectl get svc frontend-despacho
           echo ""
-          FRONTEND_URL=$(kubectl get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null) || true
+          FRONTEND_URL=$(kubectl get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || kubectl get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null) || true
           if [ -n "$FRONTEND_URL" ]; then
             echo "✅ URL del LoadBalancer: http://$FRONTEND_URL"
           else
