@@ -39,7 +39,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: './front_despacho/package-lock.json'
 
@@ -49,17 +49,14 @@ jobs:
           npm install
           npm run build
 
-      # --- 3. CONFIGURACIÓN DE CREDENCIALES DE AWS (usando rol IAM) ---
+      # --- 3. CONFIGURACIÓN DE CREDENCIALES DE AWS (usando access keys) ---
       - name: Configurar credenciales de AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
-          # Si no tienes el rol, descomenta las siguientes líneas y comenta la de role-to-assume
-          # aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          # aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          # aws-region: ${{ env.AWS_REGION }}
 
       - name: Login en ECR
         id: login-ecr
