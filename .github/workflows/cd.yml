@@ -245,6 +245,20 @@ jobs:
           echo "   kubectl get ingress despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'"
           exit 0
 
+      - name: Obtener URL del Frontend (LoadBalancer)
+        if: steps.kubeconfig.outputs.status == 'success'
+        continue-on-error: true
+        run: |
+          echo "🔍 Obteniendo URL del Frontend desde el Servicio LoadBalancer..."
+          kubectl get svc frontend-despacho
+          echo ""
+          FRONTEND_LB=$(kubectl get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null) || echo "Buscando dirección..."
+          if [ -n "$FRONTEND_LB" ]; then
+            echo "✅ URL del LoadBalancer: http://$FRONTEND_LB"
+          else
+            echo "⏳ El LoadBalancer aún no tiene asignada una dirección pública"
+          fi
+
       - name: ℹ️ Cluster EKS no disponible - Instrucciones
         if: steps.check-cluster.outputs.status == 'not-available'
         run: |
