@@ -1,5 +1,5 @@
 name: Integración Continua
-
+# Este workflow se encarga de ejecutar los tests del backend y frontend cada vez que se hace un push a la rama "devops". Si los tests pasan, se procede a construir las imágenes Docker, subirlas a ECR y actualizar los deployments en EKS.
 on:
   push:
     branches:
