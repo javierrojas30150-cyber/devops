@@ -1,3 +1,4 @@
+
 name: Integración Continua Completa
 on:
   push:
@@ -109,7 +110,7 @@ jobs:
               }' \
               --region ${{ env.AWS_REGION }}
             
-            echo "✅ $REPO configurado como público"
+            echo " $REPO configurado como público"
           done
 
       - name: Build and Push Backend Despacho
@@ -272,9 +273,9 @@ jobs:
               echo "║                                                            ║"
               echo "║  URL PÚBLICA: http://$URL"
               echo "║                                                            ║"
-              echo "║  📊 API Despachos: http://$URL/api/despachos/"
-              echo "║  📊 API Ventas:    http://$URL/api/ventas/"
-              echo "║  🎨 Frontend:      http://$URL"
+              echo "║   API Despachos: http://$URL/api/despachos/"
+              echo "║   API Ventas:    http://$URL/api/ventas/"
+              echo "║   Frontend:      http://$URL"
               echo "║                                                            ║"
               echo "╚════════════════════════════════════════════════════════════╝"
               echo ""
