@@ -301,3 +301,18 @@ jobs:
           echo ""
           echo "Ingress:"
           kubectl get ingress -n default
+
+      - name: Obtener URL del Frontend (LoadBalancer)
+        if: steps.kubeconfig.outputs.status == 'success'
+        continue-on-error: true
+        run: |
+          echo "🔍 Obteniendo URL del Frontend desde el Ingress..."
+          echo ""
+          kubectl get svc frontend-despacho
+          echo ""
+          FRONTEND_URL=$(kubectl get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null) || true
+          if [ -n "$FRONTEND_URL" ]; then
+            echo "✅ URL del LoadBalancer: http://$FRONTEND_URL"
+          else
+            echo "⏳ El LoadBalancer aún no tiene asignada una dirección pública"
+          fi
