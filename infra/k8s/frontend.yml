@@ -3,11 +3,18 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: frontend-despacho
+  namespace: default
   labels:
     app: frontend-despacho
     environment: dev
+    version: "1.0"
 spec:
   replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: frontend-despacho
@@ -15,49 +22,96 @@ spec:
     metadata:
       labels:
         app: frontend-despacho
+        version: "1.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
     spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - frontend-despacho
+              topologyKey: kubernetes.io/hostname
       containers:
         - name: frontend-despacho
           image: "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/frontend-despacho:${IMAGE_TAG}"
           imagePullPolicy: Always
           ports:
-            - containerPort: 8080
+            - name: http
+              containerPort: 8080
+              protocol: TCP
           env:
             - name: BACKEND_HOST
               value: backend-ventas
             - name: BACKEND_HOST_DESPACHOS
               value: backend-despacho
+            - name: NODE_ENV
+              value: production
+            - name: LOG_LEVEL
+              value: info
           resources:
             requests:
               memory: "128Mi"
               cpu: "100m"
             limits:
               memory: "256Mi"
-              cpu: "200m"
+              cpu: "500m"
           livenessProbe:
             httpGet:
               path: /
-              port: 8080
-            initialDelaySeconds: 10
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 15
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /
-              port: 8080
-            initialDelaySeconds: 5
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 10
             periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 15"]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
 ---
-# Service para Frontend Despacho
+# Service para Frontend Despacho (ClusterIP - no exponemos directo)
 apiVersion: v1
 kind: Service
 metadata:
   name: frontend-despacho
+  namespace: default
   labels:
     app: frontend-despacho
+  annotations:
+    description: "Service para frontend del Despacho App - Accesible solo dentro del cluster"
 spec:
   selector:
     app: frontend-despacho
   ports:
-    - port: 80
-      targetPort: 8080
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
   type: ClusterIP
+  sessionAffinity: None

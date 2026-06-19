@@ -107,17 +107,35 @@ jobs:
         continue-on-error: true
         id: kubeconfig
         run: |
-          echo "🔗 Configurando acceso a EKS cluster..."
-          if aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }} 2>&1; then
-            echo "✅ Kubeconfig configurado exitosamente"
+          echo "🔗 Verificando si el cluster EKS existe..."
+          if aws eks describe-cluster --name despachos-cluster --region ${{ env.AWS_REGION }} 2>&1 | grep -q "despachos-cluster"; then
+            echo "✅ Cluster encontrado. Configurando acceso..."
+            aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
             echo "status=success" >> $GITHUB_OUTPUT
           else
-            echo "⚠️  No se pudo configurar el cluster EKS"
-            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "⚠️  Cluster EKS no encontrado"
+            echo "status=missing" >> $GITHUB_OUTPUT
             echo ""
-            echo "📌 Si deseas desplegar en EKS manualmente:"
-            echo "   1. Crea el cluster con Terraform: cd infra/terraform && terraform apply"
-            echo "   2. Luego ejecuta: kubectl apply -f infra/k8s/ingress.yml"
+            echo "📌 PRÓXIMOS PASOS PARA CREAR EL CLUSTER:"
+            echo ""
+            echo "1. Lee la guía de permisos IAM:"
+            echo "   👉 IAM_PERMISSIONS_PROBLEM.md"
+            echo ""
+            echo "2. Solicita al admin que cree los roles IAM:"
+            echo "   - despacho-eks-cluster-role"
+            echo "   - despacho-eks-node-role"
+            echo ""
+            echo "   El admin puede usar:"
+            echo "   → create-iam-roles.sh (Linux/Mac)"
+            echo "   → create-iam-roles.ps1 (Windows PowerShell)"
+            echo ""
+            echo "3. Una vez creados los roles, ejecuta localmente:"
+            echo "   cd infra/terraform"
+            echo "   terraform init"
+            echo "   terraform apply"
+            echo ""
+            echo "4. Luego, haz push para desplegar en el cluster:"
+            echo "   git push origin devops"
             exit 0
           fi
 
@@ -129,6 +147,14 @@ jobs:
           kubectl cluster-info
           echo "✅ Conexión OK"
 
+      - name: Desplegar ConfigMap y Secrets
+        if: steps.kubeconfig.outputs.status == 'success'
+        continue-on-error: true
+        run: |
+          echo "📦 Desplegando ConfigMap y Secrets..."
+          kubectl apply -f infra/k8s/configmap-secrets.yml --validate=false
+          echo "✅ ConfigMap y Secrets aplicados"
+
       - name: Desplegar Ingress PÚBLICO (sin autenticación)
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
@@ -136,6 +162,17 @@ jobs:
           echo "📦 Desplegando Ingress público sin autenticación..."
           kubectl apply -f infra/k8s/ingress.yml --validate=false
           echo "✅ Ingress aplicado"
+
+      - name: Desplegar HPA (Horizontal Pod Autoscaler)
+        if: steps.kubeconfig.outputs.status == 'success'
+        continue-on-error: true
+        run: |
+          echo "📦 Desplegando Horizontal Pod Autoscalers..."
+          kubectl apply -f infra/k8s/hpa.yml --validate=false
+          echo "✅ HPA aplicados"
+          echo ""
+          echo "HPA Configurados:"
+          kubectl get hpa -o wide
 
       - name: Esperar a que ALB asigne DNS y obtener URL pública
         if: steps.kubeconfig.outputs.status == 'success'
