@@ -200,7 +200,7 @@ resource "aws_ecr_repository" "frontend_despacho_repo" {
 # ============================================
 
 data "aws_iam_role" "eks_cluster" {
-  name = "c216581a5470593l15483883t1w548946-LabEksClusterRole-TvRXIo27d5Vg"
+  name = "c216581a5470593l15483883t1w548946-LabEksClusterRole-ZuHNGEMyAN1t"
 }
 
 # ============================================
@@ -228,7 +228,7 @@ resource "aws_eks_cluster" "main" {
 # ============================================
 
 data "aws_iam_role" "eks_nodes" {
-  name = "c216581a5470593l15483883t1w548946983-LabEksNodeRole-vAXlTVFpvzR1"
+  name = "c216581a5470593l15483883t1w548946983-LabEksNodeRole-vNNCzcILB6sW"
 }
 
 # ============================================

@@ -46,14 +46,14 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: './front_despacho/package-lock.json'
 
       - name: Install Dependencies
         run: |
           cd front_despacho
-          npm install --frozen-lockfile
+          npm ci || npm install --frozen-lockfile
 
   # === BUILD DE IMÁGENES DOCKER ===
   build-and-push:
@@ -221,7 +221,7 @@ jobs:
               -e "s|\${AWS_REGION}|${{ env.AWS_REGION }}|g" \
               -e "s|\${IMAGE_TAG}|${{ env.IMAGE_TAG }}|g" \
               infra/k8s/backend-ventas.yml | kubectl apply -f -
-          echo "✅ Backend Ventas desplegado"
+          echo " Backend Ventas desplegado"
 
       - name: Deploy Frontend
         if: steps.kubeconfig.outputs.status == 'success'
@@ -231,14 +231,14 @@ jobs:
               -e "s|\${AWS_REGION}|${{ env.AWS_REGION }}|g" \
               -e "s|\${IMAGE_TAG}|${{ env.IMAGE_TAG }}|g" \
               infra/k8s/frontend.yml | kubectl apply -f -
-          echo "✅ Frontend desplegado"
+          echo " Frontend desplegado"
 
       - name: Install AWS Load Balancer Controller
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
           if ! kubectl get deployment -n kube-system aws-load-balancer-controller &>/dev/null; then
-            echo "📦 Instalando AWS Load Balancer Controller..."
+            echo " Instalando AWS Load Balancer Controller..."
             helm repo add eks https://aws.github.io/eks-charts
             helm repo update
             helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
@@ -248,7 +248,7 @@ jobs:
               --wait --timeout 5m || true
             sleep 10
           else
-            echo "✅ AWS Load Balancer Controller ya existe"
+            echo " AWS Load Balancer Controller ya existe"
           fi
 
       - name: Deploy Ingress
@@ -256,13 +256,13 @@ jobs:
         continue-on-error: true
         run: |
           kubectl apply -f infra/k8s/ingress.yml
-          echo "✅ Ingress desplegado"
+          echo " Ingress desplegado"
 
       - name: Wait for ALB DNS
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          echo "⏳ Esperando DNS del ALB (60 segundos)..."
+          echo " Esperando DNS del ALB (60 segundos)..."
           for i in {1..6}; do
             URL=$(kubectl get ingress despacho-ingress -n default -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
             if [ -n "$URL" ]; then
@@ -281,10 +281,10 @@ jobs:
               echo ""
               exit 0
             fi
-            echo "⏳ Intento $i/6..."
+            echo " Intento $i/6..."
             sleep 10
           done
-          echo "⚠️  Timeout esperando DNS."
+          echo "  Timeout esperando DNS."
           echo "Verifica con: kubectl get ingress despacho-ingress -n default -o wide"
 
       - name: Show Cluster Status
@@ -306,13 +306,13 @@ jobs:
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          echo "🔍 Obteniendo URL del Frontend desde el Ingress..."
+          echo " Obteniendo URL del Frontend desde el Ingress..."
           echo ""
           kubectl get svc frontend-despacho
           echo ""
           FRONTEND_URL=$(kubectl get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || kubectl get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null) || true
           if [ -n "$FRONTEND_URL" ]; then
-            echo "✅ URL del LoadBalancer: http://$FRONTEND_URL"
+            echo " URL del LoadBalancer: http://$FRONTEND_URL"
           else
-            echo "⏳ El LoadBalancer aún no tiene asignada una dirección pública"
+            echo " El LoadBalancer aún no tiene asignada una dirección pública"
           fi
