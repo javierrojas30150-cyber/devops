@@ -18,9 +18,9 @@ RUN apk add --no-cache gettext \
 RUN echo '#!/bin/sh' > /docker-entrypoint.sh && \
     echo 'set -eu' >> /docker-entrypoint.sh && \
     echo 'BACKEND_HOST="${BACKEND_HOST:-backend-ventas}"' >> /docker-entrypoint.sh && \
-    echo 'BACKEND_HOST_DESPACHOS="${BACKEND_HOST_DESPACHOS:-$BACKEND_HOST}"' >> /docker-entrypoint.sh && \
+    echo 'BACKEND_HOST_DESPACHOS="${BACKEND_HOST_DESPACHOS:-backend-despacho}"' >> /docker-entrypoint.sh && \
     echo 'export BACKEND_HOST BACKEND_HOST_DESPACHOS' >> /docker-entrypoint.sh && \
-    echo 'envsubst "$${BACKEND_HOST} $${BACKEND_HOST_DESPACHOS}" < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf' >> /docker-entrypoint.sh && \
+    echo 'envsubst < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf' >> /docker-entrypoint.sh && \
     echo 'exec nginx -g "daemon off;"' >> /docker-entrypoint.sh && \
     chmod +x /docker-entrypoint.sh && \
     chown nginx:nginx /docker-entrypoint.sh
