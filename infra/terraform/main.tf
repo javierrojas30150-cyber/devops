@@ -196,11 +196,11 @@ resource "aws_ecr_repository" "frontend_despacho_repo" {
 }
 
 # ============================================
-# IAM ROLES FOR EKS CLUSTER (Using existing Lab Roles)
+# IAM ROLES FOR EKS CLUSTER (Using Lab Roles)
 # ============================================
 
 data "aws_iam_role" "eks_cluster" {
-  name = "c216581a5470593l15483883t1w548946-LabEksClusterRole-ZuHNGEMyAN1t"
+  name = "c216581a5470593l15483883t1w548946-LabEksClusterRole-2H7sBE7pZ2WS"
 }
 
 # ============================================
@@ -224,11 +224,11 @@ resource "aws_eks_cluster" "main" {
 }
 
 # ============================================
-# IAM ROLES FOR EKS NODE GROUP (Using existing Lab Roles)
+# IAM ROLES FOR EKS NODE GROUP (Using Lab Roles)
 # ============================================
 
 data "aws_iam_role" "eks_nodes" {
-  name = "c216581a5470593l15483883t1w548946983-LabEksNodeRole-vNNCzcILB6sW"
+  name = "c216581a5470593l15483883t1w548946983-LabEksNodeRole-nUh9V3gt355b"
 }
 
 # ============================================
@@ -305,6 +305,12 @@ output "eks_cluster_arn" {
 output "eks_cluster_endpoint" {
   description = "Endpoint del cluster EKS"
   value       = aws_eks_cluster.main.endpoint
+}
+
+output "eks_cluster_certificate" {
+  description = "Certificado de autoridad del cluster EKS"
+  value       = aws_eks_cluster.main.certificate_authority[0].data
+  sensitive   = true
 }
 
 output "nat_gateway_ip" {

@@ -95,7 +95,7 @@ spec:
               drop:
                 - ALL
 ---
-# Service para Frontend Despacho (ClusterIP - no exponemos directo)
+# Service para Frontend Despacho (ClusterIP - accesible via Ingress)
 apiVersion: v1
 kind: Service
 metadata:
@@ -104,7 +104,7 @@ metadata:
   labels:
     app: frontend-despacho
   annotations:
-    description: "Service para frontend del Despacho App - Accesible públicamente via LoadBalancer"
+    description: "Service para frontend del Despacho App - Accesible via Ingress"
 spec:
   selector:
     app: frontend-despacho
@@ -113,5 +113,5 @@ spec:
       port: 80
       targetPort: http
       protocol: TCP
-  type: LoadBalancer
+  type: ClusterIP
   sessionAffinity: None
