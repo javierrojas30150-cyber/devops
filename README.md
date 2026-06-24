@@ -1,1884 +1,1312 @@
-# 🚀 Proyecto DevOps - Sistema de Despachos en AWS EKS
+# 🚀 Sistema de Gestión de Despachos y Ventas - DevOps
 
-**Grupo:** DevOps 2025 | **Encargo:** IE3-IE7 (Configuración AWS, Despliegue, Autoscaling, CI/CD)  
-**Asignatura:** Infraestructura y DevOps | **Institución:** TAITE
+**Arquitectura de microservicios modernos desplegada en AWS EKS con Kubernetes, Spring Boot, React y MySQL**
 
-Arquitectura de microservicios modernos con Kubernetes (EKS), Spring Boot 3.4.4, React 18 + Vite y MySQL 8.0. Despliegue completamente automatizado en AWS con CI/CD.
+[![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white)](https://kubernetes.io/)
+[![AWS](https://img.shields.io/badge/AWS-232F3E?style=for-the-badge&logo=amazon-aws&logoColor=FF9900)](https://aws.amazon.com/)
+[![Spring Boot](https://img.shields.io/badge/Spring_Boot-F2F4F9?style=for-the-badge&logo=spring-boot)](https://spring.io/projects/spring-boot)
+[![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactjs.org/)
 
 ---
 
 ## 📋 Tabla de Contenidos
 
-1. [Descripción del Proyecto](#descripción-del-proyecto)
-2. [Arquitectura](#arquitectura)
-3. [Requisitos del Sistema](#requisitos-del-sistema)
-4. [Inicio Rápido Local](#inicio-rápido-local)
-5. [Despliegue en AWS EKS](#despliegue-en-aws-eks)
-6. [Configuración de Autoscaling](#configuración-de-autoscaling)
-7. [Pipeline CI/CD](#pipeline-cicd)
-8. [Validación y Pruebas](#validación-y-pruebas)
-9. [Troubleshooting](#troubleshooting)
-10. [Estructura de Commits](#estructura-de-commits)
-11. [Consideraciones de Seguridad](#consideraciones-de-seguridad)
+- [Descripción del Proyecto](#descripción-del-proyecto)
+- [Stack Tecnológico](#stack-tecnológico)
+- [Arquitectura](#arquitectura)
+- [Requisitos del Sistema](#requisitos-del-sistema)
+- [Instalación Rápida](#instalación-rápida)
+- [Despliegue Local con Docker Compose](#despliegue-local-con-docker-compose)
+- [Despliegue en AWS EKS](#despliegue-en-aws-eks)
+- [Autoscaling](#autoscaling)
+- [Pipeline CI/CD](#pipeline-cicd)
+- [API y Endpoints](#api-y-endpoints)
+- [Monitoreo y Logs](#monitoreo-y-logs)
+- [Troubleshooting](#troubleshooting)
+- [Contribución](#contribución)
+- [Licencia](#licencia)
 
 ---
 
 ## 📝 Descripción del Proyecto
 
-Este proyecto implementa un **sistema de gestión de despachos y ventas** con arquitectura de microservicios desplegada en **AWS EKS (Elastic Kubernetes Service)**.
+Sistema integral de gestión de **despachos y ventas** implementado como arquitectura de microservicios con:
 
-### Componentes Principales:
+✅ **Dos backends Spring Boot** independientes (Despachos y Ventas)
+✅ **Frontend React moderno** con Vite y Tailwind CSS
+✅ **Base de datos MySQL** centralizada
+✅ **Orquestación en Kubernetes (EKS)** en AWS
+✅ **Autoscaling automático** de pods y nodos
+✅ **Pipeline CI/CD** completamente automatizado con GitHub Actions
+✅ **Balanceador de carga** ALB de AWS
+✅ **Alta disponibilidad** y tolerancia a fallos
 
-| Componente | Tecnología | Puerto | Descripción |
-|-----------|-----------|--------|------------|
-| **Backend Despachos** | Spring Boot 3.4.4 | 8081 | API REST para gestión de despachos |
-| **Backend Ventas** | Spring Boot 3.4.4 | 8080 | API REST para gestión de ventas |
-| **Frontend** | React 18 + Vite | 3000 (local), 80 (prod) | Interfaz de usuario con Nginx |
-| **Base de Datos** | MySQL 8.0 | 3306 | Base de datos centralizada |
-| **Orquestación** | Kubernetes (EKS) | - | Orquestación de contenedores |
-| **Registro** | Amazon ECR | - | Almacenamiento de imágenes Docker |
-| **CI/CD** | GitHub Actions | - | Pipeline de despliegue automático |
+### Casos de Uso
+
+- Gestión de despachos de pedidos
+- Control de ventas y transacciones
+- Seguimiento de estado de pedidos
+- Reportes de ventas y despachos
+
+---
+
+## 🔧 Stack Tecnológico
+
+| Capa | Tecnología | Versión | Propósito |
+|------|-----------|---------|----------|
+| **Frontend** | React + Vite | 18 | UI interactiva |
+| **Styling** | Tailwind CSS | v3 | Diseño responsivo |
+| **Backend 1** | Spring Boot | 3.4.4 | API Despachos |
+| **Backend 2** | Spring Boot | 3.4.4 | API Ventas |
+| **API Docs** | Springdoc OpenAPI | 2.x | Swagger/OpenAPI |
+| **Base de Datos** | MySQL | 8.0 | Persistencia |
+| **Orquestación** | Kubernetes (EKS) | 1.29+ | Container orchestration |
+| **Registro** | Amazon ECR | - | Imágenes Docker |
+| **Proxy Reverso** | Nginx | latest | Reverse proxy |
+| **CI/CD** | GitHub Actions | - | Automatización |
+| **Infraestructura** | Terraform | 1.5+ | IaC (opcional) |
 
 ---
 
 ## 🏗️ Arquitectura
 
-### Diagrama General (AWS EKS)
+### Diagrama de Componentes
 
 ```
-┌───────────────────────────────────────────────────────────────────┐
-│                        AWS ACCOUNT                                │
-├───────────────────────────────────────────────────────────────────┤
-│                                                                    │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │                     AWS EKS CLUSTER                        │  │
-│  │  (despachos-cluster, us-east-1)                           │  │
-│  │                                                            │  │
-│  │  ┌──────────────────────────────────────────────────┐     │  │
-│  │  │            VPC (10.0.0.0/16)                    │     │  │
-│  │  │                                                  │     │  │
-│  │  │  Subnet Pub: 10.0.1.0/24  │  Subnet Priv: 10.0.10.0/24
-│  │  │  (us-east-1a)             │  (us-east-1a)      │     │  │
-│  │  │                                                  │     │  │
-│  │  │  ┌──────────────────────┐                        │     │  │
-│  │  │  │  Control Plane       │                        │     │  │
-│  │  │  │  (AWS Managed)       │                        │     │  │
-│  │  │  └──────────────────────┘                        │     │  │
-│  │  │                                                  │     │  │
-│  │  │  ┌──────────────────────────────────────────┐   │     │  │
-│  │  │  │      Worker Nodes (2-4, t3.medium)      │   │     │  │
-│  │  │  │                                          │   │     │  │
-│  │  │  │  ┌─────────────────────────────────┐    │   │     │  │
-│  │  │  │  │   Frontend Despacho (LB)       │    │   │     │  │
-│  │  │  │  │   - 1 pod (HPA: 1-3)          │    │   │     │  │
-│  │  │  │  │   - Nginx reverse proxy        │    │   │     │  │
-│  │  │  │  │   - Escucha puerto 8080        │    │   │     │  │
-│  │  │  │  └─────────────────────────────────┘    │   │     │  │
-│  │  │  │                ↕ (DNS)                  │   │     │  │
-│  │  │  │  ┌─────────────────────────────────┐    │   │     │  │
-│  │  │  │  │ Backend Despacho (ClusterIP)   │    │   │     │  │
-│  │  │  │  │ - 2 pods (HPA: 2-5)            │    │   │     │  │
-│  │  │  │  │ - Spring Boot 3.4.4            │    │   │     │  │
-│  │  │  │  │ - Puerto 8081                  │    │   │     │  │
-│  │  │  │  └─────────────────────────────────┘    │   │     │  │
-│  │  │  │                ↕ (DNS)                  │   │     │  │
-│  │  │  │  ┌─────────────────────────────────┐    │   │     │  │
-│  │  │  │  │  MySQL Service (ClusterIP)    │    │   │     │  │
-│  │  │  │  │  - 1 pod (StatefulSet)         │    │   │     │  │
-│  │  │  │  │  - Puerto 3306                 │    │   │     │  │
-│  │  │  │  │  - PersistentVolume (EBS)      │    │   │     │  │
-│  │  │  │  └─────────────────────────────────┘    │   │     │  │
-│  │  │  │                                          │   │     │  │
-│  │  │  └──────────────────────────────────────────┘   │     │  │
-│  │  │                                                  │     │  │
-│  │  └──────────────────────────────────────────────────┘     │  │
-│  │                                                            │  │
-│  │  ┌──────────────────────────────────────────────────┐     │  │
-│  │  │      AWS Load Balancer (ALB)                    │     │  │
-│  │  │      - Expone frontend-despacho Service         │     │  │
-│  │  │      - URL pública: http://<ALB-Hostname>      │     │  │
-│  │  └──────────────────────────────────────────────────┘     │  │
-│  │                                                            │  │
-│  └────────────────────────────────────────────────────────────┘  │
-│                                                                    │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │            Amazon ECR (Elastic Container Registry)         │  │
-│  │  - backend-despacho:latest                                 │  │
-│  │  - frontend-despacho:latest                                │  │
-│  └────────────────────────────────────────────────────────────┘  │
-│                                                                    │
-└───────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                      AWS VPC (10.0.0.0/16)                         │
+│  ┌───────────────────────────────────────────────────────────────┐ │
+│  │                    AWS EKS Cluster                            │ │
+│  │  ┌─────────────────────────────────────────────────────────┐ │ │
+│  │  │                   Control Plane                         │ │ │
+│  │  │              (AWS Managed, Highly Available)            │ │ │
+│  │  └─────────────────────────────────────────────────────────┘ │ │
+│  │                                                               │ │
+│  │  ┌─────────────────────────────────────────────────────────┐ │ │
+│  │  │                    Worker Nodes (ASG)                  │ │ │
+│  │  │              Min: 2 | Max: 4 | Type: t3.medium         │ │ │
+│  │  │                                                         │ │ │
+│  │  │  ┌────────────────────────────────────────────────┐   │ │ │
+│  │  │  │  🌐 Frontend (Nginx)  - LoadBalancer Service │   │ │ │
+│  │  │  │  ├─ Pods: 1-3 (HPA)                          │   │ │ │
+│  │  │  │  ├─ CPU Limit: 100m | Memory: 128Mi         │   │ │ │
+│  │  │  │  └─ Puerto externo: 80                       │   │ │ │
+│  │  │  └────────────────────────────────────────────────┘   │ │ │
+│  │  │           ↓ (Service Discovery DNS)                   │ │ │
+│  │  │  ┌────────────────────────────────────────────────┐   │ │ │
+│  │  │  │  📦 Backend Despacho - ClusterIP Service     │   │ │ │
+│  │  │  │  ├─ Pods: 2-5 (HPA)                          │   │ │ │
+│  │  │  │  ├─ Spring Boot: 8081                        │   │ │ │
+│  │  │  │  ├─ CPU Limit: 500m | Memory: 512Mi         │   │ │ │
+│  │  │  │  └─ Liveness/Readiness: /actuator/health    │   │ │ │
+│  │  │  └────────────────────────────────────────────────┘   │ │ │
+│  │  │                                                         │ │ │
+│  │  │  ┌────────────────────────────────────────────────┐   │ │ │
+│  │  │  │  📦 Backend Ventas - ClusterIP Service       │   │ │ │
+│  │  │  │  ├─ Pods: 2-5 (HPA)                          │   │ │ │
+│  │  │  │  ├─ Spring Boot: 8080                        │   │ │ │
+│  │  │  │  ├─ CPU Limit: 500m | Memory: 512Mi         │   │ │ │
+│  │  │  │  └─ Liveness/Readiness: /actuator/health    │   │ │ │
+│  │  │  └────────────────────────────────────────────────┘   │ │ │
+│  │  │           ↓ (Service Discovery DNS)                   │ │ │
+│  │  │  ┌────────────────────────────────────────────────┐   │ │ │
+│  │  │  │  🗄️  MySQL - StatefulSet + ClusterIP        │   │ │ │
+│  │  │  │  ├─ Pods: 1 (No escalable)                  │   │ │ │
+│  │  │  │  ├─ Puerto: 3306                             │   │ │ │
+│  │  │  │  ├─ Storage: 20Gi EBS (PersistentVolume)    │   │ │ │
+│  │  │  │  └─ Init DB: DatosInicialesDespachos        │   │ │ │
+│  │  │  └────────────────────────────────────────────────┘   │ │ │
+│  │  └─────────────────────────────────────────────────────────┘ │ │
+│  └───────────────────────────────────────────────────────────────┘ │
+│                                                                     │
+│  ┌───────────────────────────────────────────────────────────────┐ │
+│  │              AWS Application Load Balancer (ALB)             │ │
+│  │  ├─ Listener: 80 (HTTP) → Frontend Service                 │ │
+│  │  ├─ Health Check: /                                         │ │
+│  │  └─ URL Pública: http://<ALB-Hostname>                      │ │
+│  └───────────────────────────────────────────────────────────────┘ │
+│                                                                     │
+│  ┌───────────────────────────────────────────────────────────────┐ │
+│  │           Amazon ECR (Elastic Container Registry)            │ │
+│  │  ├─ backend-despacho:latest                                 │ │
+│  │  ├─ backend-ventas:latest (futuro)                          │ │
+│  │  └─ frontend-despacho:latest                                │ │
+│  └───────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────┘
 
-┌───────────────────────────────────────────────────────────────────┐
-│                    GitHub & CI/CD Pipeline                        │
-├───────────────────────────────────────────────────────────────────┤
-│                                                                    │
-│  Developer Push to 'develop' branch                               │
-│           ↓                                                        │
-│  GitHub Actions Triggered                                         │
-│           ↓                                                        │
-│  1. Build Docker Images                                           │
-│  2. Push to Amazon ECR                                            │
-│  3. Update EKS Deployment                                         │
-│  4. Verify Services                                               │
-│  5. Get Load Balancer URL                                         │
-│           ↓                                                        │
-│  Frontend Accessible: http://<ALB-Hostname>                       │
-│                                                                    │
-└───────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                   GitHub & GitHub Actions CI/CD                     │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  Push a rama 'develop' → GitHub Actions Triggered                  │
+│       ↓                                                              │
+│  1. Checkout código                                                 │
+│  2. Configurar AWS credentials                                     │
+│  3. Login a Amazon ECR                                             │
+│  4. Build & Push Docker Images → ECR                              │
+│  5. Configure kubectl (EKS connection)                            │
+│  6. Apply Kubernetes manifests                                     │
+│  7. Update deployment images                                       │
+│  8. Wait for rollout completion                                   │
+│  9. Verify services                                                │
+│  10. Get Load Balancer URL                                        │
+│       ↓                                                              │
+│  ✅ Frontend disponible: http://<ALB-Hostname>                     │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Diagrama de Flujo de Solicitudes
+### Flujo de Solicitud HTTP
 
 ```
-┌─────────────┐
-│   Usuario   │ (Internet)
-└──────┬──────┘
-       │ HTTP/HTTPS
-       ▼
-┌─────────────────────────────────────┐
-│  AWS Application Load Balancer      │
-│  (ALB - Puerto 80/443)              │
-└──────┬──────────────────────────────┘
-       │
-       ▼
-┌─────────────────────────────────────┐
-│  Frontend Service (LoadBalancer)    │
-│  Kubernetes Service Type: LoadBalancer
-└──────┬──────────────────────────────┘
-       │
-       ▼
-┌─────────────────────────────────────┐
-│  Frontend Pod (Nginx)               │
-│  Puerto 8080 (internal)             │
-└──────┬──────────────────────────────┘
-       │
-       ├─ GET /api/ventas/*     ──→ Backend Ventas (8080)
-       │                             │
-       │                             └─→ MySQL (3306)
-       │
-       └─ GET /api/despachos/*  ──→ Backend Despacho (8081)
-                                     │
-                                     └─→ MySQL (3306)
+Cliente (Internet)
+    ↓ HTTP:80
+ALB (Application Load Balancer)
+    ↓ :8080 (Service: frontend-despacho)
+Pod Nginx (Frontend)
+    ↓ /api/despachos → :8081 (Service: backend-despacho)
+    ↓ /api/ventas    → :8080 (Service: backend-ventas)
+Backend Spring Boot
+    ↓
+MySQL (Service: mysql:3306)
 ```
-
-### Componentes AWS Utilizados
-
-| Componente | Tipo | Descripción | Justificación |
-|-----------|------|-------------|--------------|
-| **EKS Cluster** | Orquestación | Kubernetes Administrado | Escalable, managed, integrado con AWS |
-| **VPC** | Red | Virtual Private Cloud 10.0.0.0/16 | Aislamiento y seguridad |
-| **EC2 Nodes** | Compute | 2-4 nodos t3.medium (ASG) | Escalable, costo-efectivo |
-| **ALB** | Balanceador | Application Load Balancer | Distribuye tráfico, URL pública |
-| **ECR** | Registro | Amazon ECR Repositories | Almacena imágenes Docker |
-| **CloudWatch** | Monitoreo | Logs y métricas | Observabilidad |
-| **IAM Roles** | Seguridad | EKS Node Role, Task Roles | Control de acceso granular |
-| **EBS** | Almacenamiento | Persistent Volumes | BD persistente |
 
 ---
 
 ## 🔧 Requisitos del Sistema
 
-### Hardware Mínimo (Local)
+### Hardware (Para desarrollo local)
 
-- **CPU**: 4 cores
-- **RAM**: 8 GB (recomendado 16 GB)
-- **Disk**: 50 GB libres (para imágenes Docker)
-- **Sistema Operativo**: Windows 10/11, macOS, Linux
+| Componente | Mínimo | Recomendado |
+|-----------|--------|------------|
+| **CPU** | 4 cores | 8 cores |
+| **RAM** | 8 GB | 16 GB |
+| **Disco** | 50 GB SSD | 100 GB SSD |
+| **Conexión** | 5 Mbps | 20 Mbps |
 
-### Software Requerido
+### Software Obligatorio
 
-#### 1. Docker Desktop
+- **Windows 10/11, macOS 10.14+, o Linux (Ubuntu 20.04+)**
+- **Docker Desktop 4.0+** → [Descargar](https://www.docker.com/products/docker-desktop)
+- **Git 2.30+** → [Descargar](https://git-scm.com/)
+- **AWS CLI v2** → [Instalar](https://aws.amazon.com/cli/)
+- **kubectl 1.28+** → [Instalar](https://kubernetes.io/docs/tasks/tools/)
+- **Node.js 18+ LTS** (para desarrollo frontend local)
+- **Maven 3.8.1+** (para construcción local de Spring Boot)
 
-```bash
-# Descargar desde: https://www.docker.com/products/docker-desktop
+### Configuración de AWS
 
-# Verificar instalación
-docker --version
-docker run hello-world
-```
+Necesitas una cuenta AWS con acceso a:
+- EC2 (para nodos)
+- EKS (para Kubernetes)
+- ECR (para registro de imágenes)
+- VPC y subnets
+- IAM (roles y políticas)
 
-#### 2. AWS CLI v2
+> 💡 Podés usar **AWS Academy Educate** para obtener créditos gratis
 
-**Windows (PowerShell como Admin)**:
-```powershell
-msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi
-```
+---
 
-**macOS (Homebrew)**:
-```bash
-brew install awscli
-```
+## 🚀 Instalación Rápida
 
-**Linux (Ubuntu/Debian)**:
-```bash
-curl "https://awscli.amazonaws.com/awscliv2.zip" -o "awscliv2.zip"
-unzip awscliv2.zip
-sudo ./aws/install
-```
-
-Verificar:
-```bash
-aws --version
-```
-
-#### 3. kubectl
-
-**Windows (PowerShell)**:
-```powershell
-# Descargar desde: https://kubernetes.io/docs/tasks/tools/install-kubectl-on-windows/
-# O via Chocolatey:
-choco install kubernetes-cli
-```
-
-**macOS**:
-```bash
-brew install kubectl
-```
-
-**Linux**:
-```bash
-sudo snap install kubectl --classic
-```
-
-Verificar:
-```bash
-kubectl version --client
-```
-
-#### 4. Git
-
-Descargar desde: https://git-scm.com/
+### 1️⃣ Clonar el repositorio
 
 ```bash
-git --version
+git clone https://github.com/tu-usuario/despachos-devops.git
+cd despachos-devops
 ```
 
-#### 5. Visual Studio Code
-
-Descargar desde: https://code.visualstudio.com/
-
-Extensiones recomendadas:
-- Docker
-- Kubernetes
-- AWS Toolkit
-- Spring Boot Extension Pack
-- REST Client
-
-#### 6. Configurar AWS CLI
+### 2️⃣ Configurar AWS CLI
 
 ```bash
-# Obtener credenciales desde AWS Academy
+# Configurar credenciales (obtén del AWS Academy)
 aws configure
 
-# Ingresa cuando se te pida:
-# AWS Access Key ID: [Tu Key]
-# AWS Secret Access Key: [Tu Secret]
-# Default region: us-east-1
-# Default output format: json
-
-# Verificar
+# Verifica acceso
 aws sts get-caller-identity
+```
+
+### 3️⃣ Verificar requisitos
+
+```bash
+# Verificar todas las herramientas
+docker --version      # Docker Desktop 4.0+
+kubectl version       # kubectl 1.28+
+aws --version         # AWS CLI 2.0+
+git --version         # Git 2.30+
+docker-compose --version  # Docker Compose (incluido en Docker Desktop)
+
+# Debe devolver versiones sin errores
+```
+
+### 4️⃣ Opción: Despliegue Local (Recomendado primero)
+
+```bash
+# Construir imágenes (5-10 minutos)
+docker-compose build
+
+# Iniciar servicios
+docker-compose up -d
+
+# Esperar a que MySQL se inicie (verificar logs)
+docker-compose logs -f mysql
+
+# Abrir navegador a http://localhost:3000
+```
+
+### 5️⃣ Opción: Despliegue en AWS EKS
+
+> ⚠️ Avanzado - Requiere configuración AWS previa
+
+```bash
+# Ver sección "Despliegue en AWS EKS" más abajo
 ```
 
 ---
 
-## 🚀 Inicio Rápido Local
+## 🐳 Despliegue Local con Docker Compose
 
-### Opción 1: Docker Compose (Desarrollo)
+### Inicio rápido
 
 ```bash
-# 1. Clonar repositorio
-git clone https://github.com/tu-usuario/despachos-devops.git
-cd despachos-devops
-
-# 2. Crear archivo .env
-cat > .env << EOF
-DB_NAME=despachos
-DB_USERNAME=root
-DB_PASSWORD=root
-EOF
-
-# 3. Construir imágenes (primera vez puede tardar 5-10 minutos)
+# Construir todas las imágenes
 docker-compose build
 
-# 4. Iniciar servicios
+# Iniciar contenedores en background
 docker-compose up -d
 
-# 5. Verificar estado
+# Ver estado
 docker-compose ps
-
-# Esperado:
-# STATUS              PORTS
-# Up                  3306/tcp                                  (mysql)
-# Up                  0.0.0.0:8080->8080/tcp                   (backend-ventas)
-# Up                  0.0.0.0:8081->8081/tcp                   (backend-despachos)
-# Up                  0.0.0.0:3000->8080/tcp                   (frontend)
-
-# 6. Acceder a aplicaciones
-echo "Frontend:             http://localhost:3000"
-echo "Backend Ventas:       http://localhost:8080"
-echo "Backend Despacho:     http://localhost:8081/swagger-ui.html"
-echo "MySQL:                localhost:3306 (root/root)"
-
-# 7. Ver logs en tiempo real
-docker-compose logs -f
-
-# 8. Detener servicios
-docker-compose down
-
-# Opcional: Limpiar volúmenes (elimina datos)
-docker-compose down -v
 ```
 
-### Verificación de Salud Local
+**Salida esperada:**
+
+```
+NAME                 IMAGE                            STATUS       PORTS
+mysql                despachos-devops-mysql          Up 1 min     3306/tcp
+backend-despacho     despachos-devops-backend-desp   Up 30s       0.0.0.0:8081->8081/tcp
+backend-ventas       despachos-devops-backend-venta  Up 20s       0.0.0.0:8080->8080/tcp
+frontend-despacho    despachos-devops-frontend       Up 10s       0.0.0.0:3000->8080/tcp
+```
+
+### Acceder a las aplicaciones
+
+| Aplicación | URL | Usuario | Contraseña |
+|-----------|-----|---------|-----------|
+| **Frontend** | http://localhost:3000 | - | - |
+| **Backend Despacho (Swagger)** | http://localhost:8081/swagger-ui.html | - | - |
+| **Backend Ventas** | http://localhost:8080 | - | - |
+| **MySQL** | localhost:3306 | root | root |
+
+### Verificación de salud
 
 ```bash
-# Test backend despacho
+# Backend Despacho
 curl http://localhost:8081/actuator/health
 # Esperado: {"status":"UP"}
 
-# Test backend ventas
+# Backend Ventas
 curl http://localhost:8080/actuator/health
 
-# Test acceso al swagger del backend despacho
-# Abrir navegador: http://localhost:8081/swagger-ui.html
+# Frontend (página)
+curl http://localhost:3000
+```
+
+### Ver logs en tiempo real
+
+```bash
+# Todos los servicios
+docker-compose logs -f
+
+# Solo MySQL
+docker-compose logs -f mysql
+
+# Solo backend despacho
+docker-compose logs -f backend-despacho
+
+# Ctrl+C para salir
+```
+
+### Detener y limpiar
+
+```bash
+# Detener contenedores
+docker-compose down
+
+# Detener y eliminar volúmenes (elimina datos)
+docker-compose down -v
+
+# Reconstruir desde cero
+docker-compose build --no-cache
+```
+
+### Variables de entorno (.env)
+
+Crear archivo `.env` en raíz del proyecto:
+
+```env
+# MySQL
+MYSQL_DATABASE=despachos
+MYSQL_ROOT_PASSWORD=root
+MYSQL_ROOT_HOST=%
+
+# Backend
+SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/despachos?allowPublicKeyRetrieval=true&useSSL=false
+SPRING_DATASOURCE_USERNAME=root
+SPRING_DATASOURCE_PASSWORD=root
+SPRING_JPA_HIBERNATE_DDL_AUTO=update
+SPRING_JPA_SHOW_SQL=false
+
+# Profiles
+SPRING_PROFILES_ACTIVE=dev
 ```
 
 ---
 
 ## ☁️ Despliegue en AWS EKS
 
-### FASE 1: Configuración Inicial AWS Academy
+### PARTE 1: Configuración Inicial
 
-#### Paso 1.1: Obtener Credenciales AWS Academy
+#### Paso 1: Obtener credenciales AWS Academy
 
-1. Ir a: https://awsacademy.instructure.com
-2. Ingresar a "Learner Lab" o "Educate"
-3. Copiar credenciales temporales (Access Key, Secret Key, Session Token)
-4. Configurar en máquina local:
+1. Acceder a https://awsacademy.instructure.com
+2. Ir a "Learner Lab" o "Educate"
+3. Hacer click en "Start Lab"
+4. Copiar Access Key, Secret Key, Session Token
+5. Configurar en máquina local:
 
 ```bash
 aws configure
 
-# Pegar valores proporcionados por AWS Academy
-# Región: us-east-1
-# Output: json
-```
+# Ingresar valores del paso 3
+AWS Access Key ID: [Access Key]
+AWS Secret Access Key: [Secret Key]
+Default region name: us-east-1
+Default output format: json
 
-#### Paso 1.2: Verificar Acceso AWS
-
-```bash
-# Verificar identidad AWS
+# Verificar
 aws sts get-caller-identity
-
-# Salida esperada:
-# {
-#     "UserId": "AIDAI...",
-#     "Account": "123456789012",
-#     "Arn": "arn:aws:iam::123456789012:user/..."
-# }
 ```
 
-### FASE 2: Crear Infraestructura AWS
+**Output esperado:**
+```json
+{
+    "UserId": "AIDAI...",
+    "Account": "123456789012",
+    "Arn": "arn:aws:iam::123456789012:user/voclabs"
+}
+```
 
-#### Paso 2.1: Crear VPC y Subnets
+### PARTE 2: Crear Infraestructura
+
+#### Opción A: Usando Scripts Bash (Recomendado)
+
+Ejecutar script de setup:
 
 ```bash
-# 1. Crear VPC
-aws ec2 create-vpc --cidr-block 10.0.0.0/16
+./scripts/setup-eks.sh
+```
 
-# Guardar VPC ID de la salida
-export VPC_ID="vpc-xxxxxxxxx"
+**¿Qué hace?**
+- Crea VPC con subnets
+- Crea Internet Gateway y rutas
+- Crea roles IAM
+- Crea EKS cluster
+- Crea node group
+- Configura kubectl
 
-# 2. Crear subnets públicas
-aws ec2 create-subnet \
+#### Opción B: Manual (Paso a paso)
+
+##### 2.1 Crear VPC y Subnets
+
+```bash
+# Guardar variables
+export CLUSTER_NAME="despachos-cluster"
+export REGION="us-east-1"
+export ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+# Crear VPC
+VPC_ID=$(aws ec2 create-vpc \
+  --cidr-block 10.0.0.0/16 \
+  --region $REGION \
+  --query 'Vpc.VpcId' \
+  --output text)
+echo "VPC ID: $VPC_ID"
+
+# Crear subnets públicas
+SUBNET_PUBLIC_1=$(aws ec2 create-subnet \
   --vpc-id $VPC_ID \
   --cidr-block 10.0.1.0/24 \
-  --availability-zone us-east-1a
+  --availability-zone ${REGION}a \
+  --region $REGION \
+  --query 'Subnet.SubnetId' \
+  --output text)
+echo "Subnet Público 1: $SUBNET_PUBLIC_1"
 
-aws ec2 create-subnet \
+SUBNET_PUBLIC_2=$(aws ec2 create-subnet \
   --vpc-id $VPC_ID \
   --cidr-block 10.0.2.0/24 \
-  --availability-zone us-east-1b
+  --availability-zone ${REGION}b \
+  --region $REGION \
+  --query 'Subnet.SubnetId' \
+  --output text)
+echo "Subnet Público 2: $SUBNET_PUBLIC_2"
 
-# 3. Crear subnets privadas
-aws ec2 create-subnet \
+# Crear subnets privadas
+SUBNET_PRIVATE_1=$(aws ec2 create-subnet \
   --vpc-id $VPC_ID \
   --cidr-block 10.0.10.0/24 \
-  --availability-zone us-east-1a
+  --availability-zone ${REGION}a \
+  --region $REGION \
+  --query 'Subnet.SubnetId' \
+  --output text)
+echo "Subnet Privado 1: $SUBNET_PRIVATE_1"
 
-aws ec2 create-subnet \
+SUBNET_PRIVATE_2=$(aws ec2 create-subnet \
   --vpc-id $VPC_ID \
   --cidr-block 10.0.11.0/24 \
-  --availability-zone us-east-1b
-
-# Guardar IDs de subnets
-export SUBNET_1="subnet-xxxxxxxxx"
-export SUBNET_2="subnet-xxxxxxxxx"
-export SUBNET_3="subnet-xxxxxxxxx"
-export SUBNET_4="subnet-xxxxxxxxx"
+  --availability-zone ${REGION}b \
+  --region $REGION \
+  --query 'Subnet.SubnetId' \
+  --output text)
+echo "Subnet Privado 2: $SUBNET_PRIVATE_2"
 ```
 
-#### Paso 2.2: Crear Internet Gateway
+##### 2.2 Crear Internet Gateway
 
 ```bash
 # Crear IGW
-aws ec2 create-internet-gateway
-
-# Guardar IGW ID
-export IGW_ID="igw-xxxxxxxxx"
+IGW_ID=$(aws ec2 create-internet-gateway \
+  --region $REGION \
+  --query 'InternetGateway.InternetGatewayId' \
+  --output text)
+echo "IGW ID: $IGW_ID"
 
 # Adjuntar a VPC
 aws ec2 attach-internet-gateway \
   --vpc-id $VPC_ID \
-  --internet-gateway-id $IGW_ID
+  --internet-gateway-id $IGW_ID \
+  --region $REGION
 ```
 
-#### Paso 2.3: Configurar Rutas
+##### 2.3 Configurar rutas
 
 ```bash
-# Obtener Route Table de VPC
-aws ec2 describe-route-tables \
+# Obtener Route Table
+ROUTE_TABLE=$(aws ec2 describe-route-tables \
   --filters "Name=vpc-id,Values=$VPC_ID" \
+  --region $REGION \
   --query 'RouteTables[0].RouteTableId' \
-  --output text
-
-export ROUTE_TABLE_ID="rtb-xxxxxxxxx"
+  --output text)
+echo "Route Table: $ROUTE_TABLE"
 
 # Agregar ruta a Internet
 aws ec2 create-route \
-  --route-table-id $ROUTE_TABLE_ID \
+  --route-table-id $ROUTE_TABLE \
   --destination-cidr-block 0.0.0.0/0 \
-  --gateway-id $IGW_ID
+  --gateway-id $IGW_ID \
+  --region $REGION
 ```
 
-#### Paso 2.4: Crear Roles IAM
+##### 2.4 Crear Roles IAM
 
 ```bash
-# Crear confianza policy para EKS
-cat > trust-policy-eks.json << EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
+# Crear rol para EKS Service
+EKS_ROLE=$(aws iam create-role \
+  --role-name "${CLUSTER_NAME}-service-role" \
+  --assume-role-policy-document '{
+    "Version": "2012-10-17",
+    "Statement": [{
       "Effect": "Allow",
-      "Principal": {
-        "Service": "eks.amazonaws.com"
-      },
+      "Principal": {"Service": "eks.amazonaws.com"},
       "Action": "sts:AssumeRole"
-    }
-  ]
-}
-EOF
-
-# Crear rol EKS
-aws iam create-role \
-  --role-name EksServiceRole \
-  --assume-role-policy-document file://trust-policy-eks.json
+    }]
+  }' \
+  --query 'Role.Arn' \
+  --output text)
+echo "EKS Role: $EKS_ROLE"
 
 # Adjuntar políticas
 aws iam attach-role-policy \
-  --role-name EksServiceRole \
+  --role-name "${CLUSTER_NAME}-service-role" \
   --policy-arn arn:aws:iam::aws:policy/AmazonEKSServiceRolePolicy
 
 aws iam attach-role-policy \
-  --role-name EksServiceRole \
+  --role-name "${CLUSTER_NAME}-service-role" \
   --policy-arn arn:aws:iam::aws:policy/AmazonEKSVPCResourceController
 
-# Guardar ARN
-export EKS_ROLE_ARN=$(aws iam get-role \
-  --role-name EksServiceRole \
+# Crear rol para Nodos
+NODE_ROLE=$(aws iam create-role \
+  --role-name "${CLUSTER_NAME}-node-role" \
+  --assume-role-policy-document '{
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Allow",
+      "Principal": {"Service": "ec2.amazonaws.com"},
+      "Action": "sts:AssumeRole"
+    }]
+  }' \
   --query 'Role.Arn' \
   --output text)
-
-echo "EKS Role ARN: $EKS_ROLE_ARN"
-```
-
-```bash
-# Crear confianza policy para nodos EC2
-cat > trust-policy-nodes.json << EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "ec2.amazonaws.com"
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-EOF
-
-# Crear rol de nodos
-aws iam create-role \
-  --role-name EksNodeRole \
-  --assume-role-policy-document file://trust-policy-nodes.json
+echo "Node Role: $NODE_ROLE"
 
 # Adjuntar políticas
 aws iam attach-role-policy \
-  --role-name EksNodeRole \
+  --role-name "${CLUSTER_NAME}-node-role" \
   --policy-arn arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
 
 aws iam attach-role-policy \
-  --role-name EksNodeRole \
+  --role-name "${CLUSTER_NAME}-node-role" \
   --policy-arn arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
 
 aws iam attach-role-policy \
-  --role-name EksNodeRole \
+  --role-name "${CLUSTER_NAME}-node-role" \
   --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
-
-# Guardar ARN
-export NODE_ROLE_ARN=$(aws iam get-role \
-  --role-name EksNodeRole \
-  --query 'Role.Arn' \
-  --output text)
-
-echo "Node Role ARN: $NODE_ROLE_ARN"
 ```
 
-#### Paso 2.5: Crear EKS Cluster
+##### 2.5 Crear EKS Cluster
 
 ```bash
-# Crear cluster (tarda ~10-15 minutos)
+# Crear cluster (tarda 10-15 minutos)
 aws eks create-cluster \
-  --name despachos-cluster \
+  --name $CLUSTER_NAME \
   --version 1.29 \
-  --role-arn $EKS_ROLE_ARN \
+  --role-arn $EKS_ROLE \
   --resources-vpc-config \
-    subnetIds=$SUBNET_1,$SUBNET_2,$SUBNET_3,$SUBNET_4 \
-  --region us-east-1
+    "subnetIds=$SUBNET_PUBLIC_1,$SUBNET_PUBLIC_2,$SUBNET_PRIVATE_1,$SUBNET_PRIVATE_2" \
+  --region $REGION
 
-# Esperar a que se cree
+# Esperar
+echo "Esperando a que EKS Cluster se cree... (10-15 minutos)"
 aws eks wait cluster-created \
-  --name despachos-cluster \
-  --region us-east-1
+  --name $CLUSTER_NAME \
+  --region $REGION
 
-# Verificar estado
-aws eks describe-cluster \
-  --name despachos-cluster \
-  --region us-east-1 \
-  --query 'cluster.status'
+echo "✅ Cluster creado!"
 
 # Actualizar kubeconfig
 aws eks update-kubeconfig \
-  --name despachos-cluster \
-  --region us-east-1
+  --name $CLUSTER_NAME \
+  --region $REGION
 
-# Verificar conexión a cluster
+# Verificar
 kubectl get nodes
-# Esperado: No nodes yet (se agregan en paso siguiente)
 ```
 
-#### Paso 2.6: Crear Node Group
+##### 2.6 Crear Node Group
 
 ```bash
-# Crear grupo de nodos (tarda ~5-10 minutos)
+# Crear nodegroup (tarda 5-10 minutos)
 aws eks create-nodegroup \
-  --cluster-name despachos-cluster \
-  --nodegroup-name despachos-nodes \
-  --subnets $SUBNET_3 $SUBNET_4 \
-  --node-role $NODE_ROLE_ARN \
+  --cluster-name $CLUSTER_NAME \
+  --nodegroup-name "${CLUSTER_NAME}-nodes" \
+  --subnets $SUBNET_PRIVATE_1 $SUBNET_PRIVATE_2 \
+  --node-role $NODE_ROLE \
   --scaling-config minSize=2,maxSize=4,desiredSize=2 \
   --instance-types t3.medium \
-  --region us-east-1
+  --region $REGION
 
-# Esperar a que se creen nodos
+# Esperar
+echo "Esperando a que los nodos se creen... (5-10 minutos)"
 aws eks wait nodegroup-active \
-  --cluster-name despachos-cluster \
-  --nodegroup-name despachos-nodes \
-  --region us-east-1
+  --cluster-name $CLUSTER_NAME \
+  --nodegroup-name "${CLUSTER_NAME}-nodes" \
+  --region $REGION
+
+echo "✅ Nodos creados!"
 
 # Verificar nodos
-kubectl get nodes
 kubectl get nodes -o wide
-
-# Esperado:
-# NAME                          STATUS   ROLES    AGE   VERSION
-# ip-10-0-10-xxx.ec2.internal   Ready    <none>   2m    v1.29.0
-# ip-10-0-11-xxx.ec2.internal   Ready    <none>   2m    v1.29.0
 ```
 
-### FASE 3: Crear Repositorios ECR
+### PARTE 3: Crear repositorios ECR
 
 ```bash
-# Obtener AWS Account ID
-export ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-export AWS_REGION=us-east-1
+# Login a ECR
+aws ecr get-login-password --region $REGION | \
+  docker login --username AWS --password-stdin \
+  $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
 
 # Crear repositorio para backend-despacho
 aws ecr create-repository \
   --repository-name backend-despacho \
-  --region $AWS_REGION
+  --region $REGION
 
 # Crear repositorio para frontend-despacho
 aws ecr create-repository \
   --repository-name frontend-despacho \
-  --region $AWS_REGION
+  --region $REGION
+
+# Crear repositorio para backend-ventas (futuro)
+aws ecr create-repository \
+  --repository-name backend-ventas \
+  --region $REGION
 
 # Listar repositorios
-aws ecr describe-repositories --region $AWS_REGION
+aws ecr describe-repositories --region $REGION
 ```
 
-### FASE 4: Construir y Pushear Imágenes a ECR
+### PARTE 4: Construir y pushear imágenes
 
 ```bash
-# Login a ECR
-aws ecr get-login-password --region $AWS_REGION | \
-  docker login --username AWS --password-stdin \
-  $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+# Definir registros
+BACKEND_DESPACHO_IMAGE="$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/backend-despacho:latest"
+FRONTEND_IMAGE="$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/frontend-despacho:latest"
 
-# ===== BUILD BACKEND DESPACHO =====
-docker build \
-  -t backend-despacho:latest \
-  -t $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/backend-despacho:latest \
+# Construir Backend Despacho
+docker build -t backend-despacho:latest \
+  -t $BACKEND_DESPACHO_IMAGE \
   ./back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
 
-# Push Backend Despacho
-docker push \
-  $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/backend-despacho:latest
+# Pushear Backend Despacho
+docker push $BACKEND_DESPACHO_IMAGE
 
-# ===== BUILD FRONTEND =====
-docker build \
-  -t frontend-despacho:latest \
-  -t $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/frontend-despacho:latest \
+# Construir Frontend
+docker build -t frontend-despacho:latest \
+  -t $FRONTEND_IMAGE \
   ./front_despacho
 
-# Push Frontend
-docker push \
-  $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/frontend-despacho:latest
+# Pushear Frontend
+docker push $FRONTEND_IMAGE
 
-# Verificar imágenes en ECR
-aws ecr describe-images --repository-name backend-despacho --region $AWS_REGION
-aws ecr describe-images --repository-name frontend-despacho --region $AWS_REGION
+# Verificar en ECR
+aws ecr describe-images --repository-name backend-despacho --region $REGION
+aws ecr describe-images --repository-name frontend-despacho --region $REGION
 ```
 
-### FASE 5: Actualizar Manifiestos Kubernetes
+### PARTE 5: Desplegar en Kubernetes
 
 ```bash
-# Actualizar variable ACCOUNT_ID en manifiestos
-sed -i.bak "s/\\\${ACCOUNT_ID}/$ACCOUNT_ID/g" infra/k8s/*.yml
+# Actualizar manifiestos con tu ACCOUNT_ID
+export ACCOUNT_ID_SED=$(echo $ACCOUNT_ID | sed 's/\//\\\//g')
 
-# En macOS:
-# sed -i '' "s/\\\${ACCOUNT_ID}/$ACCOUNT_ID/g" infra/k8s/*.yml
+# Linux/macOS
+sed -i.bak "s/\${ACCOUNT_ID}/$ACCOUNT_ID/g" infra/k8s/*.yml
+sed -i.bak "s/\${REGION}/$REGION/g" infra/k8s/*.yml
+
+# Windows PowerShell
+(Get-Content infra/k8s/*.yml) -replace '\$\{ACCOUNT_ID\}', $ACCOUNT_ID | Set-Content infra/k8s/*.yml
 
 # Verificar cambios
-grep "dkr.ecr" infra/k8s/*.yml
-```
+grep -l "dkr.ecr" infra/k8s/*.yml
 
-### FASE 6: Desplegar en EKS
-
-```bash
-# 1. Crear namespace (opcional)
-kubectl create namespace despachos
-
-# 2. Cambiar contexto (opcional)
-kubectl config set-context --current --namespace=despachos
-
-# 3. Aplicar manifiestos
+# Aplicar manifiestos
 kubectl apply -f infra/k8s/
 
-# 4. Verificar deployments
-kubectl get deployments -o wide
-kubectl get services -o wide
+# Verificar estado (esperar a que todos los pods estén Running)
 kubectl get pods -w
+kubectl get svc -w
 
-# Esperado:
-# NAME                     READY   UP-TO-DATE   AVAILABLE
-# backend-despacho         2/2     2            2
-# frontend-despacho        1/1     1            1
-# mysql                    1/1     1            1
+# Obtener URL pública del frontend
+FRONTEND_URL=$(kubectl get svc frontend-despacho \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+echo "Frontend URL: http://$FRONTEND_URL"
 
-# 5. Obtener Load Balancer URL pública
-kubectl get svc frontend-despacho -o wide
+# Si tardó <2 minutos, esperar (ALB necesita tiempo para configurarse)
+while [ -z "$FRONTEND_URL" ]; do
+  echo "Esperando ALB..."
+  sleep 10
+  FRONTEND_URL=$(kubectl get svc frontend-despacho \
+    -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+done
 
-# Buscar en EXTERNAL-IP (puede tardar 2-3 minutos)
-kubectl get svc frontend-despacho -w
+echo "✅ Sistema listo en: http://$FRONTEND_URL"
+```
 
-# 6. Acceder a frontend
-# http://<EXTERNAL-IP>
+### Verificar despliegue
+
+```bash
+# Ver todos los recursos
+kubectl get all
+
+# Ver deployments
+kubectl get deployments -o wide
+
+# Ver servicios
+kubectl get services -o wide
+
+# Ver pods detallado
+kubectl describe pods
+
+# Ver logs de un pod
+kubectl logs -f deployment/backend-despacho
+kubectl logs -f deployment/frontend-despacho
+
+# Ejecutar test desde dentro del cluster
+kubectl run -it --rm debug --image=alpine --restart=Never -- \
+  wget -qO- http://frontend-despacho/
+
+# Acceder interactivamente a un pod
+kubectl exec -it <POD_NAME> -- /bin/bash
 ```
 
 ---
 
-## 📊 Configuración de Autoscaling
+## 📈 Autoscaling
 
-### Componente 1: Horizontal Pod Autoscaler (HPA)
+### Horizontal Pod Autoscaler (HPA)
 
-HPA escala automáticamente el número de pods basándose en métricas de CPU y memoria.
-
-#### Instalación de Metrics Server (requerido para HPA)
+Los pods se escalan automáticamente según CPU/Memory:
 
 ```bash
-# Instalar Metrics Server
+# Instalar Metrics Server (requerido para HPA)
 kubectl apply -f \
   https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
 
-# Verificar instalación
-kubectl get deployment metrics-server -n kube-system
-
-# Esperar a que esté ready
+# Esperar a que esté listo
 kubectl wait --for=condition=available --timeout=300s \
   deployment/metrics-server -n kube-system
-```
 
-#### Crear HPA para Backend Despacho
-
-Archivo: `infra/k8s/hpa.yml`
-
-```yaml
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: backend-despacho-hpa
-  namespace: default
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: backend-despacho
-  minReplicas: 2
-  maxReplicas: 5
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 50
-    - type: Resource
-      resource:
-        name: memory
-        target:
-          type: Utilization
-          averageUtilization: 70
-  behavior:
-    scaleDown:
-      stabilizationWindowSeconds: 300
-      policies:
-        - type: Percent
-          value: 50
-          periodSeconds: 60
-    scaleUp:
-      stabilizationWindowSeconds: 0
-      policies:
-        - type: Percent
-          value: 100
-          periodSeconds: 30
-
----
-
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: frontend-despacho-hpa
-  namespace: default
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: frontend-despacho
-  minReplicas: 1
-  maxReplicas: 3
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 60
-```
-
-**Justificación de valores**:
-- **Backend minReplicas: 2** - Mínimo 2 para alta disponibilidad
-- **Backend maxReplicas: 5** - Máximo para controlar costos
-- **CPU 50%** - Escalado agresivo para responder rápido a cargas
-- **Memory 70%** - Margen de seguridad ante picos
-- **Frontend minReplicas: 1** - Menos crítico, ahorra costos
-- **Frontend maxReplicas: 3** - Raro que necesite más
-
-Aplicar:
-```bash
+# Aplicar HPA
 kubectl apply -f infra/k8s/hpa.yml
 
-# Verificar
+# Ver HPA
 kubectl get hpa
 kubectl describe hpa backend-despacho-hpa
+
+# Monitorear en tiempo real
+watch kubectl get hpa
 ```
 
-#### Monitorear HPA en Tiempo Real
+### Configuración actual HPA
+
+| Componente | Min Pods | Max Pods | CPU Target | Memory Target |
+|-----------|----------|----------|-----------|---------------|
+| Backend Despacho | 2 | 5 | 50% | 70% |
+| Frontend | 1 | 3 | 60% | 70% |
+| Backend Ventas | 2 | 5 | 50% | 70% |
+
+### Prueba de autoscaling
 
 ```bash
-# Watch del HPA
-kubectl get hpa -w
-
-# Ver métricas de CPU/Memory
-kubectl top pods
-
-# Ver eventos de scaling
-kubectl get events --sort-by='.lastTimestamp'
-
-# Ver detalles del HPA
-kubectl describe hpa backend-despacho-hpa
-```
-
-### Componente 2: Auto Scaling Group de Nodos
-
-Los nodos EC2 se escalan automáticamente para soportar más pods.
-
-```bash
-# Actualizar Auto Scaling Group
-aws autoscaling update-auto-scaling-group \
-  --auto-scaling-group-name eks-despachos-nodes-asg \
-  --min-size 2 \
-  --max-size 4 \
-  --desired-capacity 2 \
-  --region us-east-1
-
-# Verificar
-aws autoscaling describe-auto-scaling-groups \
-  --auto-scaling-group-names eks-despachos-nodes-asg \
-  --region us-east-1
-```
-
-### Componente 3: Prueba de Autoscaling (Test de Carga)
-
-```bash
-# 1. Obtener nombre de un pod backend
-BACKEND_POD=$(kubectl get pods -l app=backend-despacho -o jsonpath='{.items[0].metadata.name}')
-
-# 2. Ejecutar generador de carga dentro del cluster
-kubectl run -it --rm load-generator \
-  --image=busybox:1.28 \
-  --restart=Never \
-  -- /bin/sh
-
-# 3. Dentro del pod, ejecutar loops de requests (cuidado: puede costar recursos)
-# while true; do \
-#   wget -q -O- http://backend-despacho:8081/actuator/health; \
-# done
-
-# 4. En otra terminal, monitorear el escalado
+# Terminal 1: Ver HPA en tiempo real
 watch kubectl get hpa,pods,nodes
 
-# Esperado:
-# - CPU sube encima de 50%
-# - HPA aumenta replicas de backend-despacho
-# - Si faltan recursos, nodos adicionales se crean
+# Terminal 2: Generar carga
+kubectl run -it --rm load-gen \
+  --image=busybox:1.28 \
+  --restart=Never \
+  -- /bin/sh -c "while true; do wget -q -O- http://backend-despacho:8081/actuator/health; done"
+
+# Esperar 1-2 minutos
+# Deberías ver:
+# 1. CPU de backend-despacho sube
+# 2. HPA crea más pods
+# 3. Si faltan recursos, nodos adicionales se crean (ASG)
 ```
 
 ---
 
 ## 🔄 Pipeline CI/CD
 
-### Visión General del Pipeline
+### Flujo automático
 
 ```
-GitHub commit en 'develop'
-         │
-         ▼
-GitHub Actions Triggered
-         │
-         ├─▶ Checkout código
-         │
-         ├─▶ Configurar AWS credentials
-         │
-         ├─▶ Login a ECR
-         │
-         ├─▶ Build Backend
-         │    └─▶ docker build -t backend-despacho:latest
-         │
-         ├─▶ Push Backend a ECR
-         │    └─▶ docker push $ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/backend-despacho:latest
-         │
-         ├─▶ Build Frontend
-         │    └─▶ docker build -t frontend-despacho:latest
-         │
-         ├─▶ Push Frontend a ECR
-         │    └─▶ docker push $ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/frontend-despacho:latest
-         │
-         ├─▶ Configure kubectl
-         │    └─▶ aws eks update-kubeconfig
-         │
-         ├─▶ Apply Kubernetes manifests
-         │    └─▶ kubectl apply -f infra/k8s/
-         │
-         ├─▶ Update Deployment Images
-         │    └─▶ kubectl set image deployment/backend-despacho
-         │    └─▶ kubectl set image deployment/frontend-despacho
-         │
-         ├─▶ Wait for Rollout
-         │    └─▶ kubectl rollout status
-         │
-         ├─▶ Verify Services
-         │    └─▶ kubectl get svc frontend-despacho
-         │
-         └─▶ Get Load Balancer URL
-              └─▶ kubectl get service frontend-despacho -o jsonpath
-                 └─▶ Disponible en: http://<LB-HOSTNAME>
+Push a 'develop' en GitHub
+        ↓
+GitHub Actions dispara workflow
+        ↓
+1. Checkout código
+2. Configurar AWS credentials
+3. Login a ECR
+4. Build Backend → ECR
+5. Build Frontend → ECR
+6. Actualizar kubeconfig
+7. Apply Kubernetes manifests
+8. Update images (rolling deployment)
+9. Wait for rollout
+10. Verify services
+11. Get Load Balancer URL
+        ↓
+✅ Frontend actualizado
 ```
 
-### Configuración del Pipeline
+### Configurar CI/CD
 
-Archivo: `.github/workflows/ci.yml`
+#### Paso 1: Agregar secretos a GitHub
+
+Ir a **Settings** → **Secrets and variables** → **Actions**
+
+Agregar estos secretos:
+
+| Secret | Valor |
+|--------|-------|
+| `AWS_ACCESS_KEY_ID` | Tu Access Key de AWS Academy |
+| `AWS_SECRET_ACCESS_KEY` | Tu Secret Key de AWS Academy |
+| `AWS_REGION` | us-east-1 |
+| `AWS_ACCOUNT_ID` | Resultado de `aws sts get-caller-identity --query Account` |
+| `EKS_CLUSTER_NAME` | despachos-cluster |
+
+#### Paso 2: GitHub Actions ya está configurado
+
+El workflow está en `.github/workflows/ci.yml`
 
 Características:
-- **Triggers**: Push y Pull Request a rama `develop`
-- **Build**: Docker Buildx con platform `linux/amd64`
-- **Registry**: Amazon ECR
-- **Deploy**: Kubectl update en EKS
-- **Validación**: Verificación de servicios y obtención de URL pública
+- Se ejecuta en PUSH a rama `develop`
+- Build multi-arquitectura (linux/amd64)
+- Automatic tag de imagen: `:latest` y `:git-sha`
+- Rolling deployment (0 downtime)
 
-Para ver contenido completo del archivo, revisar [.github/workflows/ci.yml](.github/workflows/ci.yml)
-
-### Activar Pipeline CI/CD
+#### Paso 3: Hacer cambios y pushear
 
 ```bash
-# 1. Crear rama develop si no existe
+# Crear rama develop si no existe
 git checkout -b develop
 git push -u origin develop
 
-# 2. Realizar cambios al código
-
-# 3. Hacer commit explicativo
+# Hacer cambios
 git add .
-git commit -m "feat: Actualizar configuración de despachos"
-# Ver sección "Estructura de Commits" para más detalles
+git commit -m "feat: Nueva funcionalidad de despachos"
 
-# 4. Push a develop
+# Pushear
 git push origin develop
 
-# 5. GitHub Actions se ejecutará automáticamente
+# GitHub Actions se ejecuta automáticamente
 # Ver en: https://github.com/tu-usuario/despachos-devops/actions
-
-# 6. Esperar a que termine (5-10 minutos típicamente)
-
-# 7. Acceder a frontend con URL del Load Balancer
-curl $(kubectl get svc frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-```
-
-### Monitorar Pipeline
-
-```bash
-# Ver workflow en GitHub Actions
-# https://github.com/tu-usuario/despachos-devops/actions
-
-# O en línea de comandos:
-gh run list
-gh run view <RUN_ID>
-
-# Ver logs del deployment en EKS
-kubectl logs -f deployment/backend-despacho
-kubectl logs -f deployment/frontend-despacho
 ```
 
 ---
 
-## 🧪 Validación y Pruebas
+## 🔌 API y Endpoints
 
-### Checklist de Validación
+### Backend Despacho (Puerto 8081)
 
-- [ ] Cluster EKS creado y con 2+ nodos running
-- [ ] Imágenes en ECR
-- [ ] MySQL pod running con datos persistentes
-- [ ] Backend Despacho respondiendo en :8081
-- [ ] Backend Ventas respondiendo en :8080
-- [ ] Frontend accesible por URL pública
-- [ ] Frontend se conecta a backends vía DNS interno
-- [ ] HPA activo y monitoreando métricas
-- [ ] Autoscaling responde a carga
-- [ ] CI/CD pipeline ejecutando automáticamente
+**Base URL**: `http://backend-despacho:8081` (interno)
 
-### Test 1: Verificar Cluster y Nodos
+#### Documentación Swagger
 
-```bash
-kubectl cluster-info
-kubectl get nodes -o wide
-kubectl describe nodes
+Acceder a http://localhost:8081/swagger-ui.html (local)
 
-# Esperado:
-# - 2+ nodos en status "Ready"
-# - Capacidad CPU y Memory disponible
-```
+Endpoints principales:
 
-### Test 2: Verificar Deployments y Pods
+| Método | Path | Descripción |
+|--------|------|------------|
+| `GET` | `/api/despachos` | Listar todos despachos |
+| `GET` | `/api/despachos/{id}` | Obtener despacho por ID |
+| `POST` | `/api/despachos` | Crear nuevo despacho |
+| `PUT` | `/api/despachos/{id}` | Actualizar despacho |
+| `DELETE` | `/api/despachos/{id}` | Eliminar despacho |
+| `GET` | `/actuator/health` | Health check |
 
-```bash
-kubectl get deployments -o wide
-kubectl get pods -o wide
-kubectl describe pod <backend-pod-name>
+### Backend Ventas (Puerto 8080)
 
-# Esperado:
-# - Todos los pods en status "Running"
-# - Containers ready
-# - Sin errores en eventos
-```
+**Base URL**: `http://backend-ventas:8080` (interno)
 
-### Test 3: Health Checks
+Endpoints principales:
 
-```bash
-# Dentro de cluster
-kubectl exec -it <backend-pod> -- \
-  curl http://backend-despacho:8081/actuator/health
+| Método | Path | Descripción |
+|--------|------|------------|
+| `GET` | `/api/ventas` | Listar ventas |
+| `GET` | `/api/ventas/{id}` | Obtener venta |
+| `POST` | `/api/ventas` | Crear venta |
+| `PUT` | `/api/ventas/{id}` | Actualizar venta |
+| `DELETE` | `/api/ventas/{id}` | Eliminar venta |
+| `GET` | `/actuator/health` | Health check |
 
-# Esperado:
-# {"status":"UP"}
+### Frontend (Puerto 3000 local, 80 EKS)
 
-# Conectividad a MySQL
-kubectl exec -it <backend-pod> -- \
-  bash -c "echo > /dev/tcp/mysql/3306 && echo 'MySQL OK' || echo 'MySQL FAIL'"
-```
-
-### Test 4: Acceso Público Frontend
-
-```bash
-# Obtener URL pública
-ALB_URL=$(kubectl get svc frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-
-# Acceder con curl
-curl http://$ALB_URL
-curl -I http://$ALB_URL
-
-# Abrir en navegador
-# http://$ALB_URL
-```
-
-### Test 5: Comunicación Front-Back
-
-```bash
-# 1. Desde navegador (Dev Tools F12)
-# 2. Abrir Console tab
-# 3. Ejecutar:
-fetch('/api/despachos/despachos')
-  .then(r => r.json())
-  .then(d => console.log(d))
-
-# Esperado: respuesta JSON desde backend
-```
-
-### Test 6: Prueba de Autoscaling
-
-```bash
-# Terminal 1: Monitor HPA y pods
-watch 'kubectl get hpa,pods -o wide'
-
-# Terminal 2: Generar carga
-kubectl run --rm -it load-test --image=busybox -- \
-  sh -c "for i in $(seq 1 1000); do \
-    wget -q -O- http://backend-despacho:8081/despachos & \
-  done; wait"
-
-# Observar:
-# - CPU sube en `kubectl top pods`
-# - Replicas de backend-despacho aumentan
-# - Después de parar carga, replicas disminuyen (con delay)
-```
-
-### Test 7: Verificar Persistencia de Datos
-
-```bash
-# 1. Insertar dato en DB
-kubectl exec -it mysql-0 -- \
-  mysql -u root -proot despachos -e \
-  "INSERT INTO despachos (id, descripcion) VALUES (1, 'Test Despacho');"
-
-# 2. Consultar dato
-kubectl exec -it mysql-0 -- \
-  mysql -u root -proot despachos -e \
-  "SELECT * FROM despachos;"
-
-# 3. Eliminar pod MySQL
-kubectl delete pod mysql-0
-
-# 4. Esperar a que se recree
-kubectl get pods -w
-
-# 5. Consultar dato nuevamente (debe existir)
-kubectl exec -it mysql-0 -- \
-  mysql -u root -proot despachos -e \
-  "SELECT * FROM despachos;"
-```
+| Ruta | Componente | Descripción |
+|------|-----------|------------|
+| `/` | Home | Página de inicio |
+| `/admin` | CrudAdmin | Panel de administración |
+| `/admin/despachos` | TableDespachos | Gestión de despachos |
+| `/admin/ventas` | TableVentas | Gestión de ventas |
 
 ---
 
-## 🛠️ Troubleshooting
+## 📊 Monitoreo y Logs
 
-### Error: Pod no inicia (ImagePullBackOff)
+### Kubernetes Monitoring
 
-**Síntomas**: `kubectl get pods` muestra status ImagePullBackOff
-
-**Causas posibles**:
-1. Imagen no existe en ECR
-2. Nodos no tienen credenciales ECR
-3. Imagen tag incorrecto
-
-**Soluciones**:
 ```bash
-# 1. Verificar imagen en ECR
-aws ecr describe-images --repository-name backend-despacho
-
-# 2. Crear secret para ECR
-kubectl create secret docker-registry ecr-secret \
-  --docker-server=$ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com \
-  --docker-username=AWS \
-  --docker-password=$(aws ecr get-login-password --region us-east-1)
-
-# 3. Usar secret en deployment
-spec:
-  imagePullSecrets:
-    - name: ecr-secret
-
-# 4. Ver logs del pod
-kubectl describe pod <pod-name>
-kubectl logs <pod-name>
-```
-
-### Error: Backend no conecta a MySQL
-
-**Síntomas**: Logs del backend muestran "Connection refused" a MySQL
-
-**Soluciones**:
-```bash
-# 1. Verificar si MySQL está running
-kubectl get pod -l app=mysql
-
-# 2. Test de conectividad
-kubectl exec -it <backend-pod> -- \
-  bash -c "timeout 5 bash -c 'echo > /dev/tcp/mysql/3306' && echo 'OK' || echo 'FAIL'"
-
-# 3. Verificar variables de entorno
-kubectl exec <backend-pod> -- env | grep DB_
-
-# 4. Ver logs de MySQL
-kubectl logs -f <mysql-pod>
-
-# 5. Aumentar timeout de Hikari en application.properties
-spring.datasource.hikari.connectionTimeout=60000
-```
-
-### Error: Frontend no llega al backend (CORS)
-
-**Síntomas**: Frontend carga, pero no ve datos. Console muestra CORS error.
-
-**Soluciones**:
-```bash
-# 1. Verificar CORS en backend
-# application.properties debe tener:
-spring.web.allow-cors=true
-
-# 2. Verificar configuración CORS en Spring
-# Ver: CorsConfig.java
-
-# 3. Test manual desde pod frontend
-kubectl exec -it <frontend-pod> -- \
-  curl http://backend-despacho:8081/actuator/health
-
-# 4. Ver nginx config en frontend
-kubectl exec -it <frontend-pod> -- \
-  cat /etc/nginx/conf.d/default.conf
-```
-
-### Error: Load Balancer no tiene IP pública
-
-**Síntomas**: `kubectl get svc frontend-despacho` muestra `<pending>` en EXTERNAL-IP
-
-**Soluciones**:
-```bash
-# 1. Es normal que tarde 2-3 minutos
-kubectl get svc frontend-despacho -w
-
-# 2. Verificar que ALB Ingress Controller esté instalado
-kubectl get pods -n kube-system | grep aws-load-balancer
-
-# 3. Ver logs del ingress controller
-kubectl logs -f -n kube-system deployment/aws-load-balancer-controller
-
-# 4. Verificar que el servicio esté correctamente configurado
-kubectl describe svc frontend-despacho
-
-# 5. Verificar Security Groups en AWS
-aws ec2 describe-security-groups --region us-east-1
-```
-
-### Error: HPA muestra "unknown" en métricas
-
-**Síntomas**: `kubectl describe hpa` muestra `<unknown>` para CPU/Memory
-
-**Soluciones**:
-```bash
-# 1. Verificar que Metrics Server esté instalado
-kubectl get deployment -n kube-system metrics-server
-
-# 2. Si no existe, instalar
-kubectl apply -f \
-  https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
-
-# 3. Esperar a que esté ready (puede tardar 1-2 minutos)
-kubectl wait --for=condition=available --timeout=300s \
-  deployment/metrics-server -n kube-system
-
-# 4. Verificar si pods reportan métricas
+# Ver uso de recursos en tiempo real
+kubectl top nodes
 kubectl top pods
 
-# 5. Ver logs de metrics-server
-kubectl logs -f -n kube-system deployment/metrics-server
+# Ver eventos del cluster
+kubectl get events -w
+
+# Ver logs de un pod
+kubectl logs <POD_NAME>
+kubectl logs -f <POD_NAME>  # Con -f ver en vivo
+
+# Logs de múltiples pods
+kubectl logs -f -l app=backend-despacho
+
+# Ver logs anteriores (si pod reinició)
+kubectl logs --previous <POD_NAME>
 ```
 
-### Error: Recursos insuficientes (Pending pods)
+### CloudWatch (AWS)
 
-**Síntomas**: Pods quedan en estado "Pending" indefinidamente
-
-**Soluciones**:
 ```bash
-# 1. Ver por qué está pending
-kubectl describe pod <pod-name>
+# Ver logs de EKS en CloudWatch
+aws logs describe-log-groups --region us-east-1
 
-# 2. Ver recursos disponibles
-kubectl top nodes
-kubectl describe nodes
-
-# 3. Agregar más nodos manualmente
-aws autoscaling set-desired-capacity \
-  --auto-scaling-group-name eks-despachos-nodes-asg \
-  --desired-capacity 3 \
+# Ver logs de cluster
+aws logs describe-log-streams \
+  --log-group-name /aws/eks/despachos-cluster/cluster \
   --region us-east-1
 
-# 4. O reducir requests de pods
-# En deployment, ajustar:
-resources:
-  requests:
-    cpu: 100m
-    memory: 128Mi
-  limits:
-    cpu: 500m
-    memory: 512Mi
+# Ver métricas de CloudWatch
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/EKS \
+  --metric-name ClusterNodeCount \
+  --start-time 2024-01-01T00:00:00Z \
+  --end-time 2024-01-02T00:00:00Z \
+  --period 3600 \
+  --statistics Average \
+  --region us-east-1
+```
+
+### Dashboards Dashboard
+
+Ver pods:
+```bash
+kubectl get pods --all-namespaces -w
+```
+
+Ver servicios expuestos:
+```bash
+kubectl get services
+```
+
+Ver PersistentVolumes:
+```bash
+kubectl get pv
 ```
 
 ---
 
-## 📝 Estructura de Commits
+## 🔧 Troubleshooting
 
-La dupla debe demostrar cambios incrementales con commits explicativos.
+### Problema: Pod stuck en "Pending"
 
-### Formato de Commits Recomendado
-
-```
-<tipo>(<scope>): <descripción corta>
-
-<descripción detallada>
-
-<footer>
-
-# Tipos:
-# feat: Nueva característica
-# fix: Corrección de bug
-# docs: Cambios de documentación
-# ci: Cambios en pipeline CI/CD
-# infra: Cambios en infraestructura (K8s, AWS)
-# refactor: Refactorización sin cambiar funcionalidad
-
-# Scopes:
-# backend: Cambios en backend
-# frontend: Cambios en frontend
-# k8s: Manifiestos Kubernetes
-# aws: Configuración AWS
-# docker: Dockerfiles
-```
-
-### Ejemplos de Commits
+**Causa**: Insuficientes recursos o subnets mal configuradas
 
 ```bash
-# Ejemplo 1: Crear cluster EKS
-git commit -m "infra(aws): Crear cluster EKS despachos-cluster
+# Verificar
+kubectl describe pod <POD_NAME>
 
-- Cluster version 1.29 con t3.medium nodes
-- VPC 10.0.0.0/16 con subnets públicas/privadas
-- 2 nodos iniciales, ASG 2-4 nodos
-- IAM roles configurados para EKS y EC2"
+# Ver eventos
+kubectl get events --sort-by='.lastTimestamp'
 
-# Ejemplo 2: Configurar autoscaling
-git commit -m "infra(k8s): Implementar HPA para autoscaling
-
-- Backend HPA: 2-5 replicas, CPU 50%, Memory 70%
-- Frontend HPA: 1-3 replicas, CPU 60%
-- Metrics Server instalado
-- Comportamiento de scale up/down configurado"
-
-# Ejemplo 3: Actualizar CI/CD
-git commit -m "ci: Actualizar pipeline para EKS deployment
-
-- Build y push a ECR desde GitHub Actions
-- Deployment automático con kubectl set image
-- Verificación de servicios al final
-- Obtención de URL pública del Load Balancer"
-
-# Ejemplo 4: Fix en backend
-git commit -m "fix(backend): Resolver timeout en conexión MySQL
-
-- Aumentar Hikari connection timeout a 60s
-- Agregar validationTimeout de 5s
-- Aumentar maximumPoolSize a 5
-- Logs del error en /docs/TROUBLESHOOTING.md
-
-Fixes #123"
+# Aumentar nodos
+aws eks update-nodegroup-config \
+  --cluster-name despachos-cluster \
+  --nodegroup-name despachos-nodes \
+  --scaling-config minSize=2,maxSize=8,desiredSize=4
 ```
 
-### Flujo de Git Recomendado
+### Problema: Frontend no conecta a Backend
+
+**Causa**: DNS o NetworkPolicy
+
+```bash
+# Verificar DNS dentro del cluster
+kubectl run -it --rm debug \
+  --image=alpine \
+  --restart=Never \
+  -- nslookup backend-despacho
+
+# Verificar conectividad
+kubectl exec -it <FRONTEND_POD> -- \
+  wget -q -O- http://backend-despacho:8081/actuator/health
+```
+
+### Problema: MySQL no inicia
+
+**Causa**: Volumen no disponible o permisos
+
+```bash
+# Ver logs de MySQL
+kubectl logs -f statefulset/mysql
+
+# Ver PVC
+kubectl get pvc
+
+# Ver PV
+kubectl get pv
+
+# Describir el error
+kubectl describe pod mysql-0
+```
+
+### Problema: ALB sin IP pública
+
+**Causa**: Timeout de AWS o LoadBalancer no configurado
+
+```bash
+# Verificar servicio
+kubectl describe svc frontend-despacho
+
+# Puede tardar 5-10 minutos
+# Esperar con
+watch kubectl get svc frontend-despacho
+
+# Si sigue sin IP después de 10 minutos:
+kubectl delete svc frontend-despacho
+kubectl apply -f infra/k8s/frontend.yml
+```
+
+### Limpiar recursos AWS (⚠️ Peligroso)
+
+```bash
+# Eliminar cluster (borra TODO)
+aws eks delete-cluster --name despachos-cluster --region us-east-1
+
+# Eliminar nodegroup
+aws eks delete-nodegroup \
+  --cluster-name despachos-cluster \
+  --nodegroup-name despachos-nodes \
+  --region us-east-1
+
+# Eliminar VPC, subnets, IGW
+# ⚠️ Manual - ir a AWS Console
+```
+
+---
+
+## 🤝 Contribución
+
+### Workflow de desarrollo
 
 ```bash
 # 1. Crear rama de feature
-git checkout -b feat/hpa-autoscaling
+git checkout -b feature/nueva-funcionalidad
 
-# 2. Realizar cambios
-# ... editar archivos ...
+# 2. Hacer cambios
 
-# 3. Commit local explicativo
-git add infra/k8s/hpa.yml
-git commit -m "feat(k8s): Agregar HPA configuration
+# 3. Commit seguindo Conventional Commits
+git commit -m "feat: descripción de la feature"
+git commit -m "fix: corrección de bug"
+git commit -m "docs: actualización de documentación"
 
-- Backend: min 2, max 5 replicas
-- Frontend: min 1, max 3 replicas
-- CPU 50% para backend, 60% para frontend"
+# 4. Push
+git push origin feature/nueva-funcionalidad
 
-# 4. Push a feature branch
-git push origin feat/hpa-autoscaling
+# 5. Crear Pull Request en GitHub
 
-# 5. Crear Pull Request en GitHub (opcional)
+# 6. Code review
 
-# 6. Merge a develop después de validar
-git checkout develop
-git pull origin develop
-git merge feat/hpa-autoscaling
-git push origin develop
+# 7. Merge a develop
+```
 
-# 7. GitHub Actions se ejecutará automáticamente
+### Conventional Commits
+
+Tipos permitidos:
+- `feat`: Nueva funcionalidad
+- `fix`: Corrección de bug
+- `docs`: Cambios en documentación
+- `style`: Cambios de formato
+- `refactor`: Refactorización sin cambio de comportamiento
+- `perf`: Mejoras de rendimiento
+- `test`: Cambios en tests
+- `chore`: Cambios en build/deps
+
+Ejemplo:
+```
+feat(backend): agregar endpoint GET /despachos/{id}
+fix(frontend): corregir validación de formulario
+docs(README): actualizar instrucciones de despliegue
+```
+
+---
+
+## 📝 Estructura del Proyecto
+
+```
+despachos-devops/
+├── back-Despachos_SpringBoot/          # Backend de Despachos
+│   ├── Springboot-API-REST-DESPACHO/
+│   │   ├── src/
+│   │   ├── pom.xml
+│   │   ├── Dockerfile
+│   │   └── entrypoint.sh
+│   └── ...
+├── back-Ventas_SpringBoot/              # Backend de Ventas
+│   ├── Springboot-API-REST/
+│   │   ├── src/
+│   │   ├── pom.xml
+│   │   ├── Dockerfile
+│   │   └── entrypoint.sh
+│   └── ...
+├── front_despacho/                      # Frontend React
+│   ├── src/
+│   ├── public/
+│   ├── package.json
+│   ├── Dockerfile
+│   ├── vite.config.js
+│   ├── tailwind.config.js
+│   └── ...
+├── infra/
+│   ├── k8s/                            # Manifiestos Kubernetes
+│   │   ├── backend-despacho.yml
+│   │   ├── backend-ventas.yml
+│   │   ├── frontend.yml
+│   │   ├── mysql.yml
+│   │   ├── configmap-secrets.yml
+│   │   ├── hpa.yml
+│   │   ├── ingress.yml
+│   │   └── ...
+│   └── terraform/                       # IaC Terraform (opcional)
+│       ├── main.tf
+│       ├── variables.tf
+│       ├── terraform.tfvars
+│       └── ...
+├── .github/
+│   └── workflows/
+│       ├── ci.yml                      # Pipeline GitHub Actions
+│       └── ...
+├── docker-compose.yml                  # Compose para desarrollo local
+├── nginx.conf                          # Configuración Nginx
+├── README.md                           # Este archivo
+└── ...
 ```
 
 ---
 
 ## 🔐 Consideraciones de Seguridad
 
-### 1. Secrets Management
+### ✅ Implementado
 
-**Problema**: Credenciales hardcodeadas en manifiestos
+- [x] Imágenes Docker sin privilegios
+- [x] Network Policies en Kubernetes (opcional)
+- [x] Secrets para credenciales
+- [x] RBAC básico
+- [x] Health checks en todos los pods
+- [x] Resource limits y requests
+- [x] Logs centralizados
 
-**Solución**: Usar Kubernetes Secrets
+### ⚠️ Para Producción
 
-```yaml
-# 1. Crear secret
-apiVersion: v1
-kind: Secret
-metadata:
-  name: db-credentials
-type: Opaque
-stringData:
-  username: root
-  password: secure_password_123
+- [ ] HTTPS/TLS en ALB
+- [ ] WAF en ALB
+- [ ] VPN para acceso administrativo
+- [ ] MFA en AWS
+- [ ] Backup automático de BD
+- [ ] Disaster Recovery plan
+- [ ] Monitoring avanzado (DataDog, New Relic)
+- [ ] Auditoría completa
 
----
-
-# 2. Usar en deployment
-env:
-  - name: DB_USERNAME
-    valueFrom:
-      secretKeyRef:
-        name: db-credentials
-        key: username
-  - name: DB_PASSWORD
-    valueFrom:
-      secretKeyRef:
-        name: db-credentials
-        key: password
-```
+### Mejores prácticas
 
 ```bash
-# Crear secret desde línea de comandos
-kubectl create secret generic db-credentials \
-  --from-literal=username=root \
-  --from-literal=password=secure_password
+# Nunca commitear secretos
+echo "*.env" >> .gitignore
+echo "secrets/" >> .gitignore
 
-# Verificar secrets
-kubectl get secrets
-kubectl describe secret db-credentials
-```
+# Usar AWS Secrets Manager para credenciales sensibles
+aws secretsmanager create-secret --name db-password --secret-string 'mypassword'
 
-### 2. RBAC (Role-Based Access Control)
+# Usar IAM roles en lugar de access keys en pods
+# Ver: https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html
 
-```yaml
-# Role para backend
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: backend-role
-rules:
-  - apiGroups: [""]
-    resources: ["services"]
-    verbs: ["get", "list"]
-  - apiGroups: [""]
-    resources: ["configmaps"]
-    verbs: ["get"]
+# Scannear imágenes Docker para vulnerabilidades
+docker scan backend-despacho:latest
 
----
-
-# RoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: backend-rolebinding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: backend-role
-subjects:
-  - kind: ServiceAccount
-    name: default
-    namespace: default
-```
-
-### 3. Network Policies
-
-```yaml
-# Permitir solo frontend a backend
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: backend-network-policy
-spec:
-  podSelector:
-    matchLabels:
-      app: backend-despacho
-  policyTypes:
-    - Ingress
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              app: frontend-despacho
-      ports:
-        - protocol: TCP
-          port: 8081
-
----
-
-# Permitir backend a MySQL
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: mysql-network-policy
-spec:
-  podSelector:
-    matchLabels:
-      app: mysql
-  policyTypes:
-    - Ingress
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              app: backend-despacho
-      ports:
-        - protocol: TCP
-          port: 3306
-```
-
-### 4. Security Context
-
-```yaml
-spec:
-  securityContext:
-    runAsNonRoot: true
-    runAsUser: 1000
-    fsGroup: 1000
-    seccompProfile:
-      type: RuntimeDefault
-  containers:
-    - name: backend
-      securityContext:
-        allowPrivilegeEscalation: false
-        readOnlyRootFilesystem: true
-        capabilities:
-          drop:
-            - ALL
-```
-
-### 5. Image Scanning
-
-```bash
-# Escanear vulnerabilidades en ECR
-aws ecr start-image-scan \
-  --repository-name backend-despacho \
-  --image-id imageTag=latest \
-  --region us-east-1
-
-# Ver resultados
-aws ecr describe-image-scan-findings \
-  --repository-name backend-despacho \
-  --image-id imageTag=latest \
-  --region us-east-1
+# Actualizar dependencias regularmente
+mvn versions:display-dependency-updates
+npm audit fix
 ```
 
 ---
 
-## 📞 Información de Contacto y Soporte
+## 📚 Recursos y Referencias
 
-**Para problemas o preguntas:**
+### Documentación oficial
 
-1. Revisar sección [Troubleshooting](#troubleshooting)
-2. Consultar logs: `kubectl logs -f <pod-name>`
-3. Ver eventos: `kubectl get events --all-namespaces --sort-by='.lastTimestamp'`
-4. AWS CloudWatch: Dashboards y métricas
-5. GitHub Issues: Reportar bugs
+- [AWS EKS Documentation](https://docs.aws.amazon.com/eks/)
+- [Kubernetes Documentation](https://kubernetes.io/docs/)
+- [Spring Boot](https://spring.io/projects/spring-boot)
+- [React + Vite](https://vitejs.dev/)
+- [Docker Documentation](https://docs.docker.com/)
 
-**Recursos útiles:**
-- [Documentación EKS](https://docs.aws.amazon.com/eks/)
-- [Documentación Kubernetes](https://kubernetes.io/docs/)
-- [Spring Boot Docs](https://spring.io/projects/spring-boot)
+### Tutoriales
+
+- [AWS Workshop - EKS Immersion Day](https://www.eksworkshop.com/)
+- [Kubernetes by Example](https://kubernetesbyexample.com/)
+- [Deploy Spring Boot on Kubernetes](https://spring.io/guides/gs/spring-boot-docker/)
+
+### Herramientas útiles
+
+- [k9s](https://k9scli.io/) - Terminal UI para Kubernetes
+- [kubectx](https://github.com/ahmetb/kubectx) - Cambiar contextos rápidamente
+- [Lens](https://k8slens.dev/) - Kubernetes IDE
+- [Docker Desktop](https://www.docker.com/products/docker-desktop) - Local development
+
+---
+
+## 📞 Soporte
+
+### Obtener ayuda
+
+1. **Revisar logs**:
+   ```bash
+   kubectl logs -f deployment/backend-despacho
+   docker-compose logs -f
+   ```
+
+2. **Verificar recursos**:
+   ```bash
+   kubectl top nodes
+   kubectl get events -w
+   ```
+
+3. **Revisar esta documentación**: Sección [Troubleshooting](#troubleshooting)
+
+4. **Crear issue en GitHub**: [Create Issue](https://github.com/tu-usuario/despachos-devops/issues)
+
+### Contacto del equipo
+
+- **DevOps Lead**: [Tu nombre]
+- **Backend Lead**: [Nombre]
+- **Frontend Lead**: [Nombre]
+- **Email**: devops@example.com
 
 ---
 
 ## 📄 Licencia
 
-Proyecto educativo para curso de **Infraestructura y DevOps** - 2025
-
-**Autores**: [Tu Grupo]
-
-**Última actualización**: 2025-06-10
-
-
-- Terraform con 2 etapas
-- Etapa 1: Recursos de red e infraestructura
-- Etapa 2: Aplicaciones y servicios
-- ECS, RDS, ALB, ECR en AWS
-
-✅ **Base de Datos**
-- MySQL 8.0
-- Inicialización automática
-- Volúmenes persistentes
-
-✅ **Seguridad**
-- .gitignore completo
-- Variables de entorno
-- Red interna Docker
+Este proyecto está bajo licencia **MIT**. Ver archivo [LICENSE](LICENSE) para más detalles.
 
 ---
 
-## Inicio Rápido - Desarrollo Local
+## 🎯 Roadmap
 
-### Opción 1: Docker Compose (Recomendado)
+### v1.0 (Actual)
+- [x] Sistema básico funcionando
+- [x] Despliegue en EKS
+- [x] CI/CD automático
+- [x] Autoscaling
 
-```bash
-# Copiar archivo de configuración de variables
-cp .env.example .env
+### v1.1 (Próximo)
+- [ ] Backend Ventas completamente integrado
+- [ ] HTTPS/TLS
+- [ ] Database backups automáticos
+- [ ] Monitoring avanzado
 
-# Editar .env con tus valores
-# DB_PASSWORD=tu_contraseña_segura
-# DB_NAME=asistencia_db
-
-# Levantar todos los servicios
-docker-compose up --build
-
-# La aplicación estará disponible en:
-# - Frontend: http://localhost:3000
-# - Backend Ventas: http://localhost:8080
-# - Backend Despachos: http://localhost:8081
-# - MySQL: localhost:3306
-```
-
-### Opción 2: Desarrollo Manual
-
-```bash
-# Backend Ventas
-cd back-Ventas_SpringBoot/Springboot-API-REST
-mvn clean package -DskipTests
-java -jar target/ventas-api.jar
-
-# Backend Despachos (otra terminal)
-cd back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
-mvn clean package -DskipTests
-java -jar target/despachos-api.jar
-
-# Frontend (otra terminal)
-cd front_despacho
-npm install
-npm run dev
-```
+### v2.0 (Futuro)
+- [ ] Multi-region deployment
+- [ ] Service Mesh (Istio)
+- [ ] GraphQL API
+- [ ] Mobile app
 
 ---
 
-## Despliegue en AWS
+## 📊 Estadísticas del Proyecto
 
-Para desplegar la aplicación completa en AWS con infraestructura como código, consulta la guía detallada:
-
-[DEPLOY_PASO_A_PASO.md](DEPLOY_PASO_A_PASO.md)
-
-### Resumen del Proceso
-
-1. Configurar AWS CLI: `aws configure`
-2. Definir variables de entorno (credenciales, key pairs)
-3. Terraform Init: `terraform init` en `infra/etapa_1`
-4. Terraform Plan: `terraform plan` para revisar cambios
-5. Terraform Apply: `terraform apply` para crear infraestructura
-6. Docker Build & Push: Subir imágenes a Amazon ECR
-7. Terraform Apply Etapa 2: Desplegar aplicaciones en ECS
-8. Acceder a través del ALB (Application Load Balancer)
-
-**Tiempo aproximado de despliegue:** 15-20 minutos
+- **Servicios**: 3 (Frontend + 2 Backends)
+- **Deployments**: 3
+- **Replicas**: 5-13 (con autoscaling)
+- **Base de Datos**: MySQL 8.0
+- **Nodos**: 2-4 (con autoscaling)
+- **Tiempo de despliegue**: ~10 minutos (AWS)
+- **Uptime target**: 99.9%
 
 ---
 
-## Estructura del Proyecto
-
-**Opción B: Estándar**
-```bash
-docker-compose up --build
-```
-✔ Configuración lista para usar
-
-**Opción C: Producción con Nginx**
-```bash
-docker-compose -f docker-compose.pro.yml up --build
-```
-✔ Reverse proxy centralizado
-✔ URLs unificadas
-
-### 3️⃣ Verificar
-
-```bash
-# Ver contenedores activos
-docker ps
-
-# Backend Ventas
-curl http://localhost:8080/swagger-ui.html
-
-# Backend Despachos
-curl http://localhost:8081/swagger-ui.html
-
-# Frontend
-open http://localhost:3000
-
-# phpMyAdmin
-open http://localhost:8888
-# Usuario: root | Contraseña: example
-```
-
----
-
-## 📁 Estructura del Proyecto
-
-```
-Devops_Project/
-├── back-Ventas_SpringBoot/
-│   └── Springboot-API-REST/
-│       ├── src/
-│       ├── pom.xml
-│       └── Dockerfile
-├── back-Despachos_SpringBoot/
-│   └── Springboot-API-REST-DESPACHO/
-│       ├── src/
-│       ├── pom.xml
-│       └── Dockerfile
-├── front_despacho/
-│   ├── src/
-│   ├── package.json
-│   ├── Dockerfile
-│   └── vite.config.js
-├── infra/
-│   ├── etapa_1/          # Terraform stage 1
-│   │   └── *.tf
-│   ├── etapa_2/          # Terraform stage 2
-│   │   └── *.tf
-│   └── mysql-init/
-│       └── init.sql
-├── .github/
-│   └── workflows/
-│       ├── ci-cd.yml     # Pipeline GitHub Actions
-│       └── deploy-azure.yml
-├── docker-compose.yml    # Estándar
-├── docker-compose.dev.yml    # Desarrollo
-├── docker-compose.pro.yml    # Producción
-├── nginx.conf            # Reverse proxy config
-├── DEPLOYMENT.md         # Guía de despliegue
-├── BEST_PRACTICES.md     # Mejores prácticas
-└── .gitignore           # Archivos a ignorar
-```
-
----
-
-## 🔧 Configuración
-
-### Variables de Entorno
-
-Crear `.env` en la raíz (NO commitar):
-```env
-# MySQL
-MYSQL_ROOT_PASSWORD=example
-MYSQL_DATABASE=ventas_db
-
-# APIs
-SPRING_DATASOURCE_URL=jdbc:mysql://db:3306/ventas_db
-SPRING_DATASOURCE_USERNAME=root
-SPRING_DATASOURCE_PASSWORD=example
-
-# Frontend
-VITE_VENTAS_API_URL=http://localhost:8080
-VITE_DESPACHOS_API_URL=http://localhost:8081
-```
-
-### Puertos
-
-| Servicio | Puerto | URL |
-|----------|--------|-----|
-| Ventas Backend | 8080 | http://localhost:8080 |
-| Despacho Backend | 8081 | http://localhost:8081 |
-| Frontend | 3000 | http://localhost:3000 |
-| Nginx Gateway | 80 | http://localhost:80 |
-| phpMyAdmin | 8888 | http://localhost:8888 |
-| MySQL | 3306 | localhost:3306 |
-
----
-
-## 🧪 Testing
-
-### Tests Unitarios
-```bash
-# Ventas
-cd back-Ventas_SpringBoot/Springboot-API-REST
-mvn test
-
-# Despachos
-cd back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
-mvn test
-
-# Frontend
-cd front_despacho
-npm run test
-```
-
-### Tests de Integración
-```bash
-# Con contenedores corriendo
-docker-compose -f docker-compose.dev.yml up
-
-# Tests contra APIs
-curl -X GET http://localhost:8080/api/ventas
-curl -X GET http://localhost:8081/api/despachos
-```
-
----
-
-## 🚀 CI/CD con GitHub Actions
-
-### Flujo Automático
-
-```
-Push a main/develop
-    ↓
-├─ Build Ventas Backend
-├─ Build Despacho Backend
-├─ Build Frontend
-├─ Security Scan (Trivy)
-├─ Integration Tests
-└─ Code Quality (SonarCloud)
-    ↓
-Push Docker Images (main only)
-    ↓
-Deploy to Azure (main only)
-```
-
-### Secrets Necesarios
-```
-GITHUB_TOKEN              # Automático
-AZURE_CREDENTIALS         # Para deploy
-SONARCLOUD_TOKEN         # Code quality
-```
-
----
-
-## 📦 Docker
-
-### Imágenes
-
-- `ventas-backend:latest` - Spring Boot Ventas
-- `despacho-backend:latest` - Spring Boot Despachos
-- `despacho-frontend:latest` - React + Nginx
-- `mysql:8.0` - Base de Datos
-- `phpmyadmin:latest` - Gestor BD
-
-### Build Manual
-```bash
-# Ventas
-docker build -t ventas-backend:latest back-Ventas_SpringBoot/Springboot-API-REST
-
-# Despachos
-docker build -t despacho-backend:latest back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
-
-# Frontend
-docker build -t despacho-frontend:latest front_despacho
-```
-
----
-
-## 🔐 Seguridad
-
-⚠️ **En desarrollo:** OK usar credenciales simples
-
-✅ **En producción, hacer:**
-```
-☐ Usar .env con secretos reales
-☐ Configurar Azure Key Vault
-☐ Usar usuario MySQL específico (no root)
-☐ Activar SSL/TLS
-☐ Agregar WAF (Web Application Firewall)
-☐ Implementar rate limiting
-☐ Auditoría de logs
-```
-
----
-
-## 🐛 Troubleshooting
-
-| Problema | Solución |
-|----------|----------|
-| Frontend en blanco | `npm run build` y `docker build` |
-| Backend no responde | Revisar logs: `docker logs ventas-backend` |
-| Error conexión BD | Esperar 40s (start_period), revisar credenciales |
-| Puerto ocupado | `netstat -ano` (Windows) o `lsof -i :8080` (Linux) |
-| Healthcheck fallando | Revisar status: `docker ps` y `docker logs` |
-
----
-
-## 📚 Documentación Adicional
-
-- [DEPLOYMENT.md](./DEPLOYMENT.md) - Guía completa de despliegue
-- [BEST_PRACTICES.md](./BEST_PRACTICES.md) - Mejores prácticas DevOps
-- [.github/workflows/](./github/workflows/) - Configuración CI/CD
-
----
-
-## 👤 Contacto & Soporte
-
-Para issues o preguntas:
-1. Revisar [BEST_PRACTICES.md](./BEST_PRACTICES.md)
-2. Consultar logs: `docker logs <contenedor>`
-3. Crear issue en GitHub
-
----
-
-## 📄 Licencia
-
-MIT
-
----
-
-## 🎓 Nivel Académico
-
-✅ Microservicios de producción
-✅ DevOps completo
-✅ CI/CD automático
-✅ Infraestructura como código (Terraform)
-✅ Best practices Docker
-✅ Seguridad y monitoreo
-
-**Nota:** Este proyecto cumple con estándares empresariales reales.
+**Última actualización**: 21 de Junio de 2024
+**Versión de documentación**: 2.0
+**Estado**: ✅ Producción Lista
