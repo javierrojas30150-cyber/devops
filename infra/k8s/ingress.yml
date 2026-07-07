@@ -1,23 +1,86 @@
-# Ingress Controller - ALB sin autenticación (PÚBLICO)
+# Ingress para exponer servicios
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: despacho-ingress
-  namespace: default
+  namespace: despacho-app
+  labels:
+    app: despacho
   annotations:
     kubernetes.io/ingress.class: alb
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
     alb.ingress.kubernetes.io/load-balancer-name: despacho-alb
-    # PÚBLICO SIN AUTENTICACIÓN
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
-    alb.ingress.kubernetes.io/tags: Project=innovatech,Environment=dev
+    alb.ingress.kubernetes.io/tags: Project=innovatech,Environment=production
     alb.ingress.kubernetes.io/healthcheck-path: /
     alb.ingress.kubernetes.io/healthcheck-interval-seconds: '30'
     alb.ingress.kubernetes.io/healthcheck-timeout-seconds: '5'
     alb.ingress.kubernetes.io/healthy-threshold-count: '2'
     alb.ingress.kubernetes.io/unhealthy-threshold-count: '2'
-    # Deshabilitamos explícitamente autenticación y SSL
+spec:
+  rules:
+    - host: despacho.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-despacho
+                port:
+                  number: 80
+          - path: /api/ventas
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-ventas
+                port:
+                  number: 8080
+          - path: /api/despachos
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-despacho
+                port:
+                  number: 8081
+
+---
+# NetworkPolicy para seguridad
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: despacho-network-policy
+  namespace: despacho-app
+  labels:
+    app: despacho
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: despacho-app
+    - from:
+        - podSelector: {}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: despacho-app
+    - to:
+        - podSelector: {}
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 53
+        - protocol: UDP
+          port: 53
     alb.ingress.kubernetes.io/security-groups: sg-default
     alb.ingress.kubernetes.io/inbound-cidrs: '0.0.0.0/0'
     # Sin autenticación OAuth, OIDC o SAML

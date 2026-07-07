@@ -3,11 +3,129 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: frontend-despacho
-  namespace: default
+  namespace: despacho-app
   labels:
     app: frontend-despacho
-    environment: dev
+    environment: production
     version: "1.0"
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: frontend-despacho
+  template:
+    metadata:
+      labels:
+        app: frontend-despacho
+        version: "1.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - frontend-despacho
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: frontend-despacho
+          image: "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/frontend-despacho:${IMAGE_TAG}"
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: BACKEND_VENTAS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: BACKEND_VENTAS_HOST
+            - name: BACKEND_VENTAS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: BACKEND_VENTAS_PORT
+            - name: BACKEND_DESPACHO_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: BACKEND_DESPACHO_HOST
+            - name: BACKEND_DESPACHO_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: BACKEND_DESPACHO_PORT
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: LOG_LEVEL
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
+---
+# Service para Frontend
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-despacho
+  namespace: despacho-app
+  labels:
+    app: frontend-despacho
+spec:
+  selector:
+    app: frontend-despacho
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  type: ClusterIP
 spec:
   replicas: 2
   strategy:

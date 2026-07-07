@@ -30,7 +30,7 @@ jobs:
         run: |
           cd back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
           chmod +x mvnw
-          ./mvnw clean test -DskipTests=false -q || echo "⚠️ Despacho tests no pasaron pero continuamos"
+          ./mvnw clean test -DskipTests=false -q || echo "Despacho tests no pasaron pero continuamos"
 
       - name: Run Backend Tests (Ventas)
         continue-on-error: true
@@ -38,7 +38,7 @@ jobs:
         run: |
           cd back-Ventas_SpringBoot/Springboot-API-REST
           chmod +x mvnw
-          ./mvnw clean test -DskipTests=false -q || echo "⚠️ Ventas tests no pasaron pero continuamos"
+          ./mvnw clean test -DskipTests=false -q || echo "Ventas tests no pasaron pero continuamos"
 
   frontend-tests:
     runs-on: ubuntu-latest
@@ -214,7 +214,7 @@ jobs:
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          kubectl apply -f infra/k8s/configmap-secrets.yml || echo "⚠️  ConfigMap/Secrets actualizado"
+          kubectl apply -f infra/k8s/configmap-secrets.yml || echo "ConfigMap/Secrets actualizado"
 
       - name: Deploy MySQL
         if: steps.kubeconfig.outputs.status == 'success'
@@ -230,7 +230,7 @@ jobs:
               -e "s|\${AWS_REGION}|${{ env.AWS_REGION }}|g" \
               -e "s|\${IMAGE_TAG}|${{ env.IMAGE_TAG }}|g" \
               infra/k8s/backend.yml | kubectl apply -f -
-          echo "✅ Backend Despacho desplegado"
+          echo "Backend Despacho desplegado"
 
       - name: Deploy Backend Ventas
         if: steps.kubeconfig.outputs.status == 'success'
@@ -250,14 +250,14 @@ jobs:
               -e "s|\${AWS_REGION}|${{ env.AWS_REGION }}|g" \
               -e "s|\${IMAGE_TAG}|${{ env.IMAGE_TAG }}|g" \
               infra/k8s/frontend.yml | kubectl apply -f -
-          echo "✅ Frontend desplegado como LoadBalancer"
+          echo "Frontend desplegado como LoadBalancer"
 
       - name: Install AWS Load Balancer Controller
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
           if ! kubectl get deployment -n kube-system aws-load-balancer-controller &>/dev/null; then
-            echo "📦 Instalando AWS Load Balancer Controller..."
+            echo "Instalando AWS Load Balancer Controller..."
             helm repo add eks https://aws.github.io/eks-charts
             helm repo update
             helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
@@ -267,7 +267,7 @@ jobs:
               --wait --timeout 5m || true
             sleep 10
           else
-            echo "✅ AWS Load Balancer Controller ya existe"
+            echo "AWS Load Balancer Controller ya existe"
           fi
 
       - name: Deploy Ingress
@@ -275,13 +275,13 @@ jobs:
         continue-on-error: true
         run: |
           kubectl apply -f infra/k8s/ingress.yml
-          echo "✅ Ingress desplegado"
+          echo "Ingress desplegado"
 
       - name: Wait for Frontend LoadBalancer IP
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          echo "⏳ Esperando que el Frontend LoadBalancer obtenga IP pública (120 segundos)..."
+          echo "Esperando que el Frontend LoadBalancer obtenga IP pública (120 segundos)..."
           TIMEOUT=120
           ELAPSED=0
           while [ $ELAPSED -lt $TIMEOUT ]; do
@@ -290,7 +290,7 @@ jobs:
             if [ -n "$FRONTEND_IP" ]; then
               echo ""
               echo "╔════════════════════════════════════════════════════════════╗"
-              echo "║         🎉 ¡FRONTEND DISPONIBLE! 🎉                        ║"
+              echo "║         iFRONTEND DISPONIBLE!                        ║"
               echo "╠════════════════════════════════════════════════════════════╣"
               echo "║                                                            ║"
               echo "║  URL DEL FRONTEND: http://$FRONTEND_IP"
@@ -300,7 +300,7 @@ jobs:
               break
             fi
             
-            echo "⏳ Esperando... ($ELAPSED/$TIMEOUT segundos)"
+            echo "Esperando... ($ELAPSED/$TIMEOUT segundos)"
             sleep 10
             ELAPSED=$((ELAPSED + 10))
           done
@@ -312,13 +312,13 @@ jobs:
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          echo "⏳ Esperando DNS del ALB/Ingress (60 segundos)..."
+          echo "Esperando DNS del ALB/Ingress (60 segundos)..."
           for i in {1..6}; do
             URL=$(kubectl get ingress despacho-ingress -n default -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
             if [ -n "$URL" ]; then
               echo ""
               echo "╔════════════════════════════════════════════════════════════╗"
-              echo "║         🎉 ¡INGRESS/ALB DISPONIBLE! 🎉                     ║"
+              echo "║         ¡INGRESS/ALB DISPONIBLE!                     ║"
               echo "╠════════════════════════════════════════════════════════════╣"
               echo "║                                                            ║"
               echo "║  URL PÚBLICA: http://$URL"
@@ -331,10 +331,10 @@ jobs:
               echo ""
               exit 0
             fi
-            echo "⏳ Intento $i/6..."
+            echo "Intento $i/6..."
             sleep 10
           done
-          echo "⚠️  Timeout esperando DNS."
+          echo "Timeout esperando DNS."
           echo "Verifica con: kubectl get ingress despacho-ingress -n default -o wide"
 
       - name: Show Cluster Status
@@ -356,7 +356,7 @@ jobs:
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          echo "📋 Obteniendo URL del Frontend desde el LoadBalancer..."
+          echo "Obteniendo URL del Frontend desde el LoadBalancer..."
           echo ""
           kubectl get svc frontend-despacho
           echo ""
@@ -364,10 +364,10 @@ jobs:
           FRONTEND_IP=$(kubectl get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
           
           if [ -n "$FRONTEND_HOSTNAME" ]; then
-            echo "✅ URL del Frontend (LoadBalancer): http://$FRONTEND_HOSTNAME"
+            echo "URL del Frontend (LoadBalancer): http://$FRONTEND_HOSTNAME"
           elif [ -n "$FRONTEND_IP" ]; then
-            echo "✅ URL del Frontend (IP): http://$FRONTEND_IP"
+            echo "URL del Frontend (IP): http://$FRONTEND_IP"
           else
-            echo "⏳ El LoadBalancer aún no tiene asignada una dirección pública"
+            echo "El LoadBalancer aún no tiene asignada una dirección pública"
             echo "   Espera unos minutos y verifica con: kubectl get svc frontend-despacho -w"
           fi

@@ -1,13 +1,16 @@
-# Despliegue MySQL
+# Deployment MySQL
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mysql
+  namespace: despacho-app
   labels:
     app: mysql
-    environment: dev
+    environment: production
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: mysql
@@ -15,9 +18,127 @@ spec:
     metadata:
       labels:
         app: mysql
+        version: "8.0.35"
     spec:
       containers:
         - name: mysql
+          image: mysql:8.0.35
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: mysql
+              containerPort: 3306
+              protocol: TCP
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: DB_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: DB_NAME
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: MYSQL_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: MYSQL_PASSWORD
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - mysqladmin ping -h localhost
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - mysqladmin ping -h localhost
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          volumeMounts:
+            - name: mysql-storage
+              mountPath: /var/lib/mysql
+            - name: mysql-config
+              mountPath: /etc/mysql/conf.d
+      volumes:
+        - name: mysql-storage
+          persistentVolumeClaim:
+            claimName: mysql-pvc
+        - name: mysql-config
+          configMap:
+            name: mysql-config
+
+---
+# ConfigMap para configuración MySQL
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-config
+  namespace: despacho-app
+data:
+  mysql.cnf: |
+    [mysqld]
+    character_set_server=utf8mb4
+    collation_server=utf8mb4_unicode_ci
+    max_connections=1000
+    default_storage_engine=InnoDB
+    sql_mode='STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+
+---
+# PersistentVolumeClaim para MySQL
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pvc
+  namespace: despacho-app
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp2
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+# Service para MySQL
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-service
+  namespace: despacho-app
+  labels:
+    app: mysql
+spec:
+  selector:
+    app: mysql
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: mysql
+      protocol: TCP
+  type: ClusterIP
+  clusterIP: None  # Headless service para StatefulSet compatibility
           image: mysql:8.0.35   # Versión fija para reproducibilidad
           ports:
             - containerPort: 3306

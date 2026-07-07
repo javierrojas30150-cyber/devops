@@ -107,13 +107,13 @@ jobs:
         continue-on-error: true
         id: check-cluster
         run: |
-          echo "🔗 Verificando disponibilidad del cluster EKS..."
+          echo "Verificando disponibilidad del cluster EKS..."
           if aws eks describe-cluster --name despachos-cluster --region ${{ env.AWS_REGION }} 2>&1 | grep -q "ACTIVE\|CREATING"; then
             echo "status=available" >> $GITHUB_OUTPUT
-            echo "✅ Cluster EKS disponible"
+            echo "Cluster EKS disponible"
           else
             echo "status=not-available" >> $GITHUB_OUTPUT
-            echo "ℹ️  Cluster EKS no disponible (aún no creado)"
+            echo "Cluster EKS no disponible (aún no creado)"
           fi
 
       - name: Configurar kubeconfig para EKS
@@ -121,7 +121,7 @@ jobs:
         continue-on-error: true
         id: kubeconfig
         run: |
-          echo "✅ Configurando acceso al cluster EKS..."
+          echo "Configurando acceso al cluster EKS..."
           aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
           echo "status=success" >> $GITHUB_OUTPUT
 
@@ -129,77 +129,77 @@ jobs:
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          echo "🔍 Verificando conexión al cluster..."
+          echo "Verificando conexión al cluster..."
           kubectl cluster-info
-          echo "✅ Conexión OK"
+          echo "Conexión OK"
 
       - name: Desplegar ConfigMap y Secrets
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          echo "📦 Desplegando ConfigMap y Secrets..."
+          echo "Desplegando ConfigMap y Secrets..."
           kubectl apply -f infra/k8s/configmap-secrets.yml --validate=false
-          echo "✅ ConfigMap y Secrets aplicados"
+          echo "ConfigMap y Secrets aplicados"
 
       - name: Deploy MySQL
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          echo "📦 Desplegando MySQL..."
+          echo "Desplegando MySQL..."
           kubectl apply -f infra/k8s/mysql.yml --validate=false
-          echo "✅ MySQL desplegado"
-          echo "⏳ Esperando a que MySQL esté listo..."
+          echo "MySQL desplegado"
+          echo "Esperando a que MySQL esté listo..."
           kubectl wait --for=condition=ready pod -l app=mysql --timeout=300s --ignore-not-found=true
-          echo "✅ MySQL está listo"
+          echo "MySQL está listo"
 
       - name: Deploy Backend Despacho
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          echo "📦 Desplegando Backend Despacho..."
+          echo "Desplegando Backend Despacho..."
           kubectl apply -f infra/k8s/backend.yml --validate=false
-          echo "✅ Backend Despacho desplegado"
-          echo "⏳ Esperando a que Backend Despacho esté listo..."
+          echo "Backend Despacho desplegado"
+          echo "Esperando a que Backend Despacho esté listo..."
           kubectl wait --for=condition=ready pod -l app=backend-despacho --timeout=300s --ignore-not-found=true
-          echo "✅ Backend Despacho está listo"
+          echo "Backend Despacho está listo"
 
       - name: Deploy Backend Ventas
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          echo "📦 Desplegando Backend Ventas..."
+          echo "Desplegando Backend Ventas..."
           kubectl apply -f infra/k8s/backend-ventas.yml --validate=false
-          echo "✅ Backend Ventas desplegado"
-          echo "⏳ Esperando a que Backend Ventas esté listo..."
+          echo "Backend Ventas desplegado"
+          echo "Esperando a que Backend Ventas esté listo..."
           kubectl wait --for=condition=ready pod -l app=backend-ventas --timeout=300s --ignore-not-found=true
-          echo "✅ Backend Ventas está listo"
+          echo "Backend Ventas está listo"
 
       - name: Deploy Frontend
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          echo "📦 Desplegando Frontend..."
+          echo "Desplegando Frontend..."
           kubectl apply -f infra/k8s/frontend.yml --validate=false
-          echo "✅ Frontend desplegado"
-          echo "⏳ Esperando a que Frontend esté listo..."
+          echo "Frontend desplegado"
+          echo "Esperando a que Frontend esté listo..."
           kubectl wait --for=condition=ready pod -l app=frontend-despacho --timeout=300s --ignore-not-found=true
-          echo "✅ Frontend está listo"
+          echo "Frontend está listo"
 
       - name: Desplegar Ingress PÚBLICO (sin autenticación)
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          echo "📦 Desplegando Ingress público sin autenticación..."
+          echo "Desplegando Ingress público sin autenticación..."
           kubectl apply -f infra/k8s/ingress.yml --validate=false
-          echo "✅ Ingress aplicado"
+          echo "Ingress aplicado"
 
       - name: Desplegar HPA (Horizontal Pod Autoscaler)
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          echo "📦 Desplegando Horizontal Pod Autoscalers..."
+          echo "Desplegando Horizontal Pod Autoscalers..."
           kubectl apply -f infra/k8s/hpa.yml --validate=false
-          echo "✅ HPA aplicados"
+          echo "HPA aplicados"
           echo ""
           echo "HPA Configurados:"
           kubectl get hpa -o wide
@@ -209,19 +209,19 @@ jobs:
         continue-on-error: true
         id: get-url
         run: |
-          echo "⏳ Esperando a que AWS ALB asigne la URL pública..."
+          echo "Esperando a que AWS ALB asigne la URL pública..."
           echo ""
           FRONTEND_URL=""
           for i in {1..30}; do
             FRONTEND_URL=$(kubectl get ingress despacho-ingress -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
             if [ -n "$FRONTEND_URL" ]; then
-              echo "✅ URL PÚBLICA DISPONIBLE (SIN CONTRASEÑA):"
+              echo "URL PÚBLICA DISPONIBLE (SIN CONTRASEÑA):"
               echo ""
-              echo "   🌐 Frontend:        http://$FRONTEND_URL"
-              echo "   📦 API Ventas:      http://$FRONTEND_URL/api/ventas/"
-              echo "   📋 API Despachos:   http://$FRONTEND_URL/api/despachos/"
+              echo "   Frontend:        http://$FRONTEND_URL"
+              echo "   API Ventas:      http://$FRONTEND_URL/api/ventas/"
+              echo "   API Despachos:   http://$FRONTEND_URL/api/despachos/"
               echo ""
-              echo "🎉 La aplicación está lista para usar"
+              echo "La aplicación está lista para usar"
               echo "   ✓ Frontend accesible públicamente"
               echo "   ✓ Sin autenticación requerida"
               echo "   ✓ Backends respondiendo"
@@ -230,15 +230,15 @@ jobs:
               exit 0
             fi
             if [ $((i % 5)) -eq 0 ]; then
-              echo "   ⏳ Intento $i/30 - Esperando ALB..."
+              echo "   Intento $i/30 - Esperando ALB..."
             fi
             sleep 5
           done
           echo ""
-          echo "⚠️  Timeout esperando URL del ALB"
+          echo "Timeout esperando URL del ALB"
           echo "   AWS puede tardar hasta 5 minutos en asignar el DNS"
           echo ""
-          echo "🔍 Para verificar manualmente, ejecuta:"
+          echo "Para verificar manualmente, ejecuta:"
           echo "   kubectl get ingress despacho-ingress -n default"
           echo ""
           echo "   O para obtener solo la URL:"
@@ -249,22 +249,22 @@ jobs:
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          echo "🔍 Obteniendo URL del Frontend desde el Servicio LoadBalancer..."
+          echo "Obteniendo URL del Frontend desde el Servicio LoadBalancer..."
           kubectl get svc frontend-despacho
           echo ""
           FRONTEND_LB=$(kubectl get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null) || echo "Buscando dirección..."
           if [ -n "$FRONTEND_LB" ]; then
-            echo "✅ URL del LoadBalancer: http://$FRONTEND_LB"
+            echo "URL del LoadBalancer: http://$FRONTEND_LB"
           else
-            echo "⏳ El LoadBalancer aún no tiene asignada una dirección pública"
+            echo "El LoadBalancer aún no tiene asignada una dirección pública"
           fi
 
-      - name: ℹ️ Cluster EKS no disponible - Instrucciones
+      - name: Cluster EKS no disponible - Instrucciones
         if: steps.check-cluster.outputs.status == 'not-available'
         run: |
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "ℹ️  CLUSTER EKS NO DISPONIBLE"
+          echo "CLUSTER EKS NO DISPONIBLE"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
           echo "Las imágenes Docker se compilaron exitosamente ✓"

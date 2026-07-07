@@ -1,4 +1,4 @@
-# 🚀 Sistema de Gestión de Despachos y Ventas - DevOps
+# Sistema de Gestión de Despachos y Ventas - DevOps
 
 **Arquitectura de microservicios modernos desplegada en AWS EKS con Kubernetes, Spring Boot, React y MySQL**
 
@@ -10,7 +10,7 @@
 
 ---
 
-## 📋 Tabla de Contenidos
+## Tabla de Contenidos
 
 - [Descripción del Proyecto](#descripción-del-proyecto)
 - [Stack Tecnológico](#stack-tecnológico)
@@ -29,18 +29,18 @@
 
 ---
 
-## 📝 Descripción del Proyecto
+## Descripción del Proyecto
 
 Sistema integral de gestión de **despachos y ventas** implementado como arquitectura de microservicios con:
 
-✅ **Dos backends Spring Boot** independientes (Despachos y Ventas)
-✅ **Frontend React moderno** con Vite y Tailwind CSS
-✅ **Base de datos MySQL** centralizada
-✅ **Orquestación en Kubernetes (EKS)** en AWS
-✅ **Autoscaling automático** de pods y nodos
-✅ **Pipeline CI/CD** completamente automatizado con GitHub Actions
-✅ **Balanceador de carga** ALB de AWS
-✅ **Alta disponibilidad** y tolerancia a fallos
+- **Dos backends Spring Boot** independientes (Despachos y Ventas)
+- **Frontend React moderno** con Vite y Tailwind CSS
+- **Base de datos MySQL** centralizada
+- **Orquestación en Kubernetes (EKS)** en AWS
+- **Autoscaling automático** de pods y nodos
+- **Pipeline CI/CD** completamente automatizado con GitHub Actions
+- **Balanceador de carga** ALB de AWS
+- **Alta disponibilidad** y tolerancia a fallos
 
 ### Casos de Uso
 
@@ -51,7 +51,7 @@ Sistema integral de gestión de **despachos y ventas** implementado como arquite
 
 ---
 
-## 🔧 Stack Tecnológico
+## Stack Tecnológico
 
 | Capa | Tecnología | Versión | Propósito |
 |------|-----------|---------|----------|
@@ -69,7 +69,7 @@ Sistema integral de gestión de **despachos y ventas** implementado como arquite
 
 ---
 
-## 🏗️ Arquitectura
+## Arquitectura
 
 ### Diagrama de Componentes
 
@@ -88,14 +88,14 @@ Sistema integral de gestión de **despachos y ventas** implementado como arquite
 │  │  │              Min: 2 | Max: 4 | Type: t3.medium         │ │ │
 │  │  │                                                         │ │ │
 │  │  │  ┌────────────────────────────────────────────────┐   │ │ │
-│  │  │  │  🌐 Frontend (Nginx)  - LoadBalancer Service │   │ │ │
+│  │  │  │  Frontend (Nginx)  - LoadBalancer Service │   │ │ │
 │  │  │  │  ├─ Pods: 1-3 (HPA)                          │   │ │ │
 │  │  │  │  ├─ CPU Limit: 100m | Memory: 128Mi         │   │ │ │
 │  │  │  │  └─ Puerto externo: 80                       │   │ │ │
 │  │  │  └────────────────────────────────────────────────┘   │ │ │
 │  │  │           ↓ (Service Discovery DNS)                   │ │ │
 │  │  │  ┌────────────────────────────────────────────────┐   │ │ │
-│  │  │  │  📦 Backend Despacho - ClusterIP Service     │   │ │ │
+│  │  │  │  Backend Despacho - ClusterIP Service     │   │ │ │
 │  │  │  │  ├─ Pods: 2-5 (HPA)                          │   │ │ │
 │  │  │  │  ├─ Spring Boot: 8081                        │   │ │ │
 │  │  │  │  ├─ CPU Limit: 500m | Memory: 512Mi         │   │ │ │
@@ -103,7 +103,7 @@ Sistema integral de gestión de **despachos y ventas** implementado como arquite
 │  │  │  └────────────────────────────────────────────────┘   │ │ │
 │  │  │                                                         │ │ │
 │  │  │  ┌────────────────────────────────────────────────┐   │ │ │
-│  │  │  │  📦 Backend Ventas - ClusterIP Service       │   │ │ │
+│  │  │  │  Backend Ventas - ClusterIP Service       │   │ │ │
 │  │  │  │  ├─ Pods: 2-5 (HPA)                          │   │ │ │
 │  │  │  │  ├─ Spring Boot: 8080                        │   │ │ │
 │  │  │  │  ├─ CPU Limit: 500m | Memory: 512Mi         │   │ │ │
@@ -111,7 +111,7 @@ Sistema integral de gestión de **despachos y ventas** implementado como arquite
 │  │  │  └────────────────────────────────────────────────┘   │ │ │
 │  │  │           ↓ (Service Discovery DNS)                   │ │ │
 │  │  │  ┌────────────────────────────────────────────────┐   │ │ │
-│  │  │  │  🗄️  MySQL - StatefulSet + ClusterIP        │   │ │ │
+│  │  │  │  MySQL - StatefulSet + ClusterIP        │   │ │ │
 │  │  │  │  ├─ Pods: 1 (No escalable)                  │   │ │ │
 │  │  │  │  ├─ Puerto: 3306                             │   │ │ │
 │  │  │  │  ├─ Storage: 20Gi EBS (PersistentVolume)    │   │ │ │
@@ -152,7 +152,7 @@ Sistema integral de gestión de **despachos y ventas** implementado como arquite
 │  9. Verify services                                                │
 │  10. Get Load Balancer URL                                        │
 │       ↓                                                              │
-│  ✅ Frontend disponible: http://<ALB-Hostname>                     │
+│  Frontend disponible: http://<ALB-Hostname>                     │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -174,7 +174,7 @@ MySQL (Service: mysql:3306)
 
 ---
 
-## 🔧 Requisitos del Sistema
+## Requisitos del Sistema
 
 ### Hardware (Para desarrollo local)
 
@@ -204,20 +204,20 @@ Necesitas una cuenta AWS con acceso a:
 - VPC y subnets
 - IAM (roles y políticas)
 
-> 💡 Podés usar **AWS Academy Educate** para obtener créditos gratis
+> Para desarrollo local: Podés usar **AWS Academy Educate** para obtener créditos gratis
 
 ---
 
-## 🚀 Instalación Rápida
+## Instalación Rápida
 
-### 1️⃣ Clonar el repositorio
+### Clonar el repositorio
 
 ```bash
 git clone https://github.com/tu-usuario/despachos-devops.git
 cd despachos-devops
 ```
 
-### 2️⃣ Configurar AWS CLI
+### Configurar AWS CLI
 
 ```bash
 # Configurar credenciales (obtén del AWS Academy)
@@ -227,7 +227,7 @@ aws configure
 aws sts get-caller-identity
 ```
 
-### 3️⃣ Verificar requisitos
+### Verificar requisitos
 
 ```bash
 # Verificar todas las herramientas
@@ -240,7 +240,7 @@ docker-compose --version  # Docker Compose (incluido en Docker Desktop)
 # Debe devolver versiones sin errores
 ```
 
-### 4️⃣ Opción: Despliegue Local (Recomendado primero)
+### Opción: Despliegue Local (Recomendado primero)
 
 ```bash
 # Construir imágenes (5-10 minutos)
@@ -255,9 +255,9 @@ docker-compose logs -f mysql
 # Abrir navegador a http://localhost:3000
 ```
 
-### 5️⃣ Opción: Despliegue en AWS EKS
+### Opción: Despliegue en AWS EKS
 
-> ⚠️ Avanzado - Requiere configuración AWS previa
+Avanzado - Requiere configuración AWS previa
 
 ```bash
 # Ver sección "Despliegue en AWS EKS" más abajo
@@ -265,7 +265,7 @@ docker-compose logs -f mysql
 
 ---
 
-## 🐳 Despliegue Local con Docker Compose
+## Despliegue Local con Docker Compose
 
 ### Inicio rápido
 
@@ -364,7 +364,7 @@ SPRING_PROFILES_ACTIVE=dev
 
 ---
 
-## ☁️ Despliegue en AWS EKS
+## Despliegue en AWS EKS
 
 ### PARTE 1: Configuración Inicial
 
@@ -583,7 +583,7 @@ aws eks wait cluster-created \
   --name $CLUSTER_NAME \
   --region $REGION
 
-echo "✅ Cluster creado!"
+echo "Cluster creado!"
 
 # Actualizar kubeconfig
 aws eks update-kubeconfig \
@@ -614,7 +614,7 @@ aws eks wait nodegroup-active \
   --nodegroup-name "${CLUSTER_NAME}-nodes" \
   --region $REGION
 
-echo "✅ Nodos creados!"
+echo "Nodos creados!"
 
 # Verificar nodos
 kubectl get nodes -o wide
@@ -711,7 +711,7 @@ while [ -z "$FRONTEND_URL" ]; do
     -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 done
 
-echo "✅ Sistema listo en: http://$FRONTEND_URL"
+echo "Sistema listo en: http://$FRONTEND_URL"
 ```
 
 ### Verificar despliegue
@@ -743,7 +743,7 @@ kubectl exec -it <POD_NAME> -- /bin/bash
 
 ---
 
-## 📈 Autoscaling
+## Autoscaling
 
 ### Horizontal Pod Autoscaler (HPA)
 
@@ -798,7 +798,7 @@ kubectl run -it --rm load-gen \
 
 ---
 
-## 🔄 Pipeline CI/CD
+## Pipeline CI/CD
 
 ### Flujo automático
 
@@ -819,7 +819,7 @@ GitHub Actions dispara workflow
 10. Verify services
 11. Get Load Balancer URL
         ↓
-✅ Frontend actualizado
+Frontend actualizado
 ```
 
 ### Configurar CI/CD
@@ -915,7 +915,7 @@ Endpoints principales:
 
 ---
 
-## 📊 Monitoreo y Logs
+## Monitoreo y Logs
 
 ### Kubernetes Monitoring
 
@@ -979,7 +979,7 @@ kubectl get pv
 
 ---
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Problema: Pod stuck en "Pending"
 
@@ -1050,7 +1050,7 @@ kubectl delete svc frontend-despacho
 kubectl apply -f infra/k8s/frontend.yml
 ```
 
-### Limpiar recursos AWS (⚠️ Peligroso)
+### Limpiar recursos AWS (Peligroso)
 
 ```bash
 # Eliminar cluster (borra TODO)
@@ -1063,7 +1063,7 @@ aws eks delete-nodegroup \
   --region us-east-1
 
 # Eliminar VPC, subnets, IGW
-# ⚠️ Manual - ir a AWS Console
+# Manual - ir a AWS Console
 ```
 
 ---
@@ -1114,7 +1114,7 @@ docs(README): actualizar instrucciones de despliegue
 
 ---
 
-## 📝 Estructura del Proyecto
+## Estructura del Proyecto
 
 ```
 despachos-devops/
@@ -1167,9 +1167,9 @@ despachos-devops/
 
 ---
 
-## 🔐 Consideraciones de Seguridad
+## Consideraciones de Seguridad
 
-### ✅ Implementado
+### Implementado
 
 - [x] Imágenes Docker sin privilegios
 - [x] Network Policies en Kubernetes (opcional)
@@ -1179,7 +1179,7 @@ despachos-devops/
 - [x] Resource limits y requests
 - [x] Logs centralizados
 
-### ⚠️ Para Producción
+### Para Producción
 
 - [ ] HTTPS/TLS en ALB
 - [ ] WAF en ALB
@@ -1238,7 +1238,7 @@ npm audit fix
 
 ---
 
-## 📞 Soporte
+## Soporte
 
 ### Obtener ayuda
 
@@ -1267,13 +1267,13 @@ npm audit fix
 
 ---
 
-## 📄 Licencia
+## Licencia
 
 Este proyecto está bajo licencia **MIT**. Ver archivo [LICENSE](LICENSE) para más detalles.
 
 ---
 
-## 🎯 Roadmap
+## Roadmap
 
 ### v1.0 (Actual)
 - [x] Sistema básico funcionando
@@ -1295,7 +1295,7 @@ Este proyecto está bajo licencia **MIT**. Ver archivo [LICENSE](LICENSE) para m
 
 ---
 
-## 📊 Estadísticas del Proyecto
+## Estadísticas del Proyecto
 
 - **Servicios**: 3 (Frontend + 2 Backends)
 - **Deployments**: 3
@@ -1309,4 +1309,4 @@ Este proyecto está bajo licencia **MIT**. Ver archivo [LICENSE](LICENSE) para m
 
 **Última actualización**: 21 de Junio de 2024
 **Versión de documentación**: 2.0
-**Estado**: ✅ Producción Lista
+**Estado**: Producción Lista

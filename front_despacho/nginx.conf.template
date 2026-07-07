@@ -8,7 +8,7 @@ server {
     }
 
     location /api/ventas/ {
-        proxy_pass http://@BACKEND_HOST@:8080;
+        proxy_pass http://${BACKEND_HOST};
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -16,7 +16,7 @@ server {
     }
 
     location /api/despachos/ {
-        proxy_pass http://@BACKEND_HOST_DESPACHOS@:8081;
+        proxy_pass http://${BACKEND_HOST_DESPACHOS};
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
