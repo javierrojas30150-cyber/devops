@@ -215,6 +215,7 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
           ENVIRONMENT: development
         run: |
+          kubectl create namespace despacho-app --dry-run=client -o yaml | kubectl apply -f -
           # Actualizar variables de entorno para dev
           sed -i "s/environment: production/environment: development/g" infra/k8s/*.yml
           sed -i "s|\${ACCOUNT_ID}|$ACCOUNT_ID|g" infra/k8s/*.yml
@@ -271,6 +272,7 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
           ENVIRONMENT: production
         run: |
+          kubectl create namespace despacho-app --dry-run=client -o yaml | kubectl apply -f -
           # Asegurar ambiente de producción
           sed -i "s/environment: development/environment: production/g" infra/k8s/*.yml
           sed -i "s|\${ACCOUNT_ID}|$ACCOUNT_ID|g" infra/k8s/*.yml

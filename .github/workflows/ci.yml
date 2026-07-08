@@ -210,10 +210,11 @@ jobs:
           fi
           echo "account_id=$account_id" >> $GITHUB_OUTPUT
 
-      - name: Create/Update ConfigMap and Secrets
+      - name: Create Namespace and ConfigMap/Secrets
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
+          kubectl create namespace despacho-app --dry-run=client -o yaml | kubectl apply -f -
           kubectl apply -f infra/k8s/configmap-secrets.yml || echo "ConfigMap/Secrets actualizado"
 
       - name: Deploy MySQL

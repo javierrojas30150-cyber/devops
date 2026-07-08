@@ -133,10 +133,12 @@ jobs:
           kubectl cluster-info
           echo "Conexión OK"
 
-      - name: Desplegar ConfigMap y Secrets
+      - name: Crear namespace y desplegar ConfigMap y Secrets
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
+          echo "Creando namespace despacho-app..."
+          kubectl create namespace despacho-app --dry-run=client -o yaml | kubectl apply -f -
           echo "Desplegando ConfigMap y Secrets..."
           kubectl apply -f infra/k8s/configmap-secrets.yml --validate=false
           echo "ConfigMap y Secrets aplicados"
