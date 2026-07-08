@@ -239,10 +239,10 @@ jobs:
           echo "   AWS puede tardar hasta 5 minutos en asignar el DNS"
           echo ""
           echo "Para verificar manualmente, ejecuta:"
-          echo "   kubectl get ingress despacho-ingress -n default"
+          echo "   kubectl -n despacho-app get ingress despacho-ingress"
           echo ""
           echo "   O para obtener solo la URL:"
-          echo "   kubectl get ingress despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'"
+          echo "   kubectl -n despacho-app get ingress despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'"
           exit 0
 
       - name: Obtener URL del Frontend (LoadBalancer)
@@ -250,9 +250,9 @@ jobs:
         continue-on-error: true
         run: |
           echo "Obteniendo URL del Frontend desde el Servicio LoadBalancer..."
-          kubectl get svc frontend-despacho
+          kubectl -n despacho-app get svc frontend-despacho
           echo ""
-          FRONTEND_LB=$(kubectl get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null) || echo "Buscando dirección..."
+          FRONTEND_LB=$(kubectl -n despacho-app get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null) || echo "Buscando dirección..."
           if [ -n "$FRONTEND_LB" ]; then
             echo "URL del LoadBalancer: http://$FRONTEND_LB"
           else

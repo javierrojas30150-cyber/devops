@@ -335,7 +335,7 @@ jobs:
             sleep 10
           done
           echo "Timeout esperando DNS."
-          echo "Verifica con: kubectl get ingress despacho-ingress -n default -o wide"
+          echo "Verifica con: kubectl -n despacho-app get ingress despacho-ingress -o wide"
 
       - name: Show Cluster Status
         if: steps.kubeconfig.outputs.status == 'success'
@@ -344,13 +344,13 @@ jobs:
           echo "═══════ ESTADO DEL CLUSTER ═══════"
           echo ""
           echo "Pods desplegados:"
-          kubectl get pods -n default
+          kubectl get pods -n despacho-app
           echo ""
           echo "Servicios:"
-          kubectl get svc -n default
+          kubectl get svc -n despacho-app
           echo ""
           echo "Ingress:"
-          kubectl get ingress -n default
+          kubectl get ingress -n despacho-app
 
       - name: Obtener URL del Frontend (LoadBalancer)
         if: steps.kubeconfig.outputs.status == 'success'
@@ -358,10 +358,10 @@ jobs:
         run: |
           echo "Obteniendo URL del Frontend desde el LoadBalancer..."
           echo ""
-          kubectl get svc frontend-despacho
+          kubectl -n despacho-app get svc frontend-despacho
           echo ""
-          FRONTEND_HOSTNAME=$(kubectl get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
-          FRONTEND_IP=$(kubectl get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+          FRONTEND_HOSTNAME=$(kubectl -n despacho-app get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+          FRONTEND_IP=$(kubectl -n despacho-app get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
           
           if [ -n "$FRONTEND_HOSTNAME" ]; then
             echo "URL del Frontend (LoadBalancer): http://$FRONTEND_HOSTNAME"
