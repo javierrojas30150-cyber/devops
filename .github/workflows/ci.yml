@@ -359,16 +359,28 @@ jobs:
         run: |
           echo "Obteniendo URL del Frontend desde el LoadBalancer..."
           echo ""
-          kubectl -n despacho-app get svc frontend-despacho
-          echo ""
-          FRONTEND_HOSTNAME=$(kubectl -n despacho-app get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
-          FRONTEND_IP=$(kubectl -n despacho-app get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
-          
-          if [ -n "$FRONTEND_HOSTNAME" ]; then
-            echo "URL del Frontend (LoadBalancer): http://$FRONTEND_HOSTNAME"
-          elif [ -n "$FRONTEND_IP" ]; then
-            echo "URL del Frontend (IP): http://$FRONTEND_IP"
+          for i in {1..12}; do
+            if kubectl -n despacho-app get svc frontend-despacho >/dev/null 2>&1; then
+              break
+            fi
+            echo "Esperando a que aparezca el servicio frontend-despacho... ($i/12)"
+            sleep 10
+          done
+
+          if kubectl -n despacho-app get svc frontend-despacho >/dev/null 2>&1; then
+            kubectl -n despacho-app get svc frontend-despacho
+            echo ""
+            FRONTEND_HOSTNAME=$(kubectl -n despacho-app get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+            FRONTEND_IP=$(kubectl -n despacho-app get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+            
+            if [ -n "$FRONTEND_HOSTNAME" ]; then
+              echo "URL del Frontend (LoadBalancer): http://$FRONTEND_HOSTNAME"
+            elif [ -n "$FRONTEND_IP" ]; then
+              echo "URL del Frontend (IP): http://$FRONTEND_IP"
+            else
+              echo "El LoadBalancer aún no tiene asignada una dirección pública"
+              echo "   Espera unos minutos y verifica con: kubectl -n despacho-app get svc frontend-despacho -w"
+            fi
           else
-            echo "El LoadBalancer aún no tiene asignada una dirección pública"
-            echo "   Espera unos minutos y verifica con: kubectl get svc frontend-despacho -w"
+            echo "El servicio frontend-despacho aún no existe. Verifica el despliegue del frontend."
           fi

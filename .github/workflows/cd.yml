@@ -252,13 +252,25 @@ jobs:
         continue-on-error: true
         run: |
           echo "Obteniendo URL del Frontend desde el Servicio LoadBalancer..."
-          kubectl -n despacho-app get svc frontend-despacho
-          echo ""
-          FRONTEND_LB=$(kubectl -n despacho-app get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null) || echo "Buscando dirección..."
-          if [ -n "$FRONTEND_LB" ]; then
-            echo "URL del LoadBalancer: http://$FRONTEND_LB"
+          for i in {1..12}; do
+            if kubectl -n despacho-app get svc frontend-despacho >/dev/null 2>&1; then
+              break
+            fi
+            echo "Esperando a que aparezca el servicio frontend-despacho... ($i/12)"
+            sleep 10
+          done
+
+          if kubectl -n despacho-app get svc frontend-despacho >/dev/null 2>&1; then
+            kubectl -n despacho-app get svc frontend-despacho
+            echo ""
+            FRONTEND_LB=$(kubectl -n despacho-app get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+            if [ -n "$FRONTEND_LB" ]; then
+              echo "URL del LoadBalancer: http://$FRONTEND_LB"
+            else
+              echo "El LoadBalancer aún no tiene asignada una dirección pública"
+            fi
           else
-            echo "El LoadBalancer aún no tiene asignada una dirección pública"
+            echo "El servicio frontend-despacho aún no existe. Verifica el despliegue del frontend."
           fi
 
       - name: Cluster EKS no disponible - Instrucciones
