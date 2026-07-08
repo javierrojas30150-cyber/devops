@@ -247,6 +247,24 @@ jobs:
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
+          kubectl apply -f - <<'EOF'
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: frontend-despacho
+            namespace: despacho-app
+            annotations:
+              service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+              service.beta.kubernetes.io/aws-load-balancer-type: nlb
+          spec:
+            selector:
+              app: frontend-despacho
+            ports:
+              - name: http
+                port: 80
+                targetPort: http
+            type: LoadBalancer
+          EOF
           sed -e "s|\${ACCOUNT_ID}|${{ steps.account.outputs.account_id }}|g" \
               -e "s|\${AWS_REGION}|${{ env.AWS_REGION }}|g" \
               -e "s|\${IMAGE_TAG}|${{ env.IMAGE_TAG }}|g" \
@@ -286,7 +304,7 @@ jobs:
           TIMEOUT=120
           ELAPSED=0
           while [ $ELAPSED -lt $TIMEOUT ]; do
-            FRONTEND_IP=$(kubectl get svc frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+            FRONTEND_IP=$(kubectl -n despacho-app get svc frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
             
             if [ -n "$FRONTEND_IP" ]; then
               echo ""
@@ -315,7 +333,7 @@ jobs:
         run: |
           echo "Esperando DNS del ALB/Ingress (60 segundos)..."
           for i in {1..6}; do
-            URL=$(kubectl get ingress despacho-ingress -n default -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+            URL=$(kubectl -n despacho-app get ingress despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
             if [ -n "$URL" ]; then
               echo ""
               echo "╔════════════════════════════════════════════════════════════╗"

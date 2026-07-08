@@ -46,6 +46,9 @@ kind: Service
 metadata:
   name: frontend-despacho
   namespace: despacho-app
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
 spec:
   selector:
     app: frontend-despacho

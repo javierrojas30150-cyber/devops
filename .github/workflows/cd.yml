@@ -181,6 +181,24 @@ jobs:
         continue-on-error: true
         run: |
           echo "Desplegando Frontend..."
+          kubectl apply -f - <<'EOF'
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: frontend-despacho
+            namespace: despacho-app
+            annotations:
+              service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+              service.beta.kubernetes.io/aws-load-balancer-type: nlb
+          spec:
+            selector:
+              app: frontend-despacho
+            ports:
+              - name: http
+                port: 80
+                targetPort: http
+            type: LoadBalancer
+          EOF
           kubectl apply -f infra/k8s/frontend.yml --validate=false
           echo "Frontend desplegado"
           echo "Esperando a que Frontend esté listo..."
