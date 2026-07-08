@@ -1,6 +1,6 @@
 # Multistage
 # Stage 1: build React
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /build
 COPY package*.json ./
 RUN npm ci
@@ -21,5 +21,6 @@ COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=builder /build/dist /usr/share/nginx/html
 USER nginx
 ENV BACKEND_HOST=backend-ventas
+ENV BACKEND_HOST_DESPACHOS=backend-despacho
 EXPOSE 8080
 ENTRYPOINT ["/docker-entrypoint.sh"]

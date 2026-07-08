@@ -17,11 +17,10 @@ spec:
     spec:
       containers:
         - name: frontend-despacho
-          image: ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/frontend-despacho:${IMAGE_TAG}
+          image: 548946983683.dkr.ecr.us-east-1.amazonaws.com/frontend-despacho:latest
           imagePullPolicy: Always
           ports:
-            - name: http
-              containerPort: 8080
+            - containerPort: 8080
           env:
             - name: BACKEND_HOST
               value: backend-ventas
@@ -32,26 +31,15 @@ spec:
           readinessProbe:
             httpGet:
               path: /
-              port: http
-            initialDelaySeconds: 10
+              port: 8080
+            initialDelaySeconds: 15
             periodSeconds: 10
-            timeoutSeconds: 3
-            failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /
-              port: http
+              port: 8080
             initialDelaySeconds: 20
             periodSeconds: 15
-            timeoutSeconds: 5
-            failureThreshold: 3
-          resources:
-            requests:
-              memory: "128Mi"
-              cpu: "100m"
-            limits:
-              memory: "256Mi"
-              cpu: "500m"
 ---
 apiVersion: v1
 kind: Service
@@ -62,7 +50,6 @@ spec:
   selector:
     app: frontend-despacho
   ports:
-    - name: http
-      port: 80
-      targetPort: http
-  type: ClusterIP
+    - port: 80
+      targetPort: 8080
+  type: LoadBalancer
