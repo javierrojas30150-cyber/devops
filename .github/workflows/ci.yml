@@ -248,26 +248,7 @@ jobs:
         continue-on-error: true
         run: |
           kubectl create namespace despacho-app --dry-run=client -o yaml | kubectl apply -f -
-          kubectl apply -f - <<'EOF'
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: frontend-despacho
-            namespace: despacho-app
-            annotations:
-              service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
-              service.beta.kubernetes.io/aws-load-balancer-type: nlb
-              service.beta.kubernetes.io/aws-load-balancer-healthcheck-path: /
-          spec:
-            selector:
-              app: frontend-despacho
-            ports:
-              - name: http
-                port: 80
-                targetPort: http
-            type: LoadBalancer
-          EOF
-          kubectl patch service frontend-despacho -n despacho-app --type='merge' -p '{"metadata":{"annotations":{"service.beta.kubernetes.io/aws-load-balancer-scheme":"internet-facing","service.beta.kubernetes.io/aws-load-balancer-type":"nlb","service.beta.kubernetes.io/aws-load-balancer-healthcheck-path":"/"}}}' || true
+          kubectl apply -f infra/k8s/frontend-service.yml
           sed -e "s|\${ACCOUNT_ID}|${{ steps.account.outputs.account_id }}|g" \
               -e "s|\${AWS_REGION}|${{ env.AWS_REGION }}|g" \
               -e "s|\${IMAGE_TAG}|${{ env.IMAGE_TAG }}|g" \

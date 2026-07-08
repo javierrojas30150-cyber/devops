@@ -227,24 +227,7 @@ jobs:
           kubectl apply -f infra/k8s/mysql.yml
           kubectl apply -f infra/k8s/backend-ventas.yml
           kubectl apply -f infra/k8s/backend.yml
-          kubectl apply -f - <<'EOF'
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: frontend-despacho
-            namespace: despacho-app
-            annotations:
-              service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
-              service.beta.kubernetes.io/aws-load-balancer-type: nlb
-          spec:
-            selector:
-              app: frontend-despacho
-            ports:
-              - name: http
-                port: 80
-                targetPort: http
-            type: LoadBalancer
-          EOF
+          kubectl apply -f infra/k8s/frontend-service.yml
           kubectl apply -f infra/k8s/frontend.yml
           kubectl apply -f infra/k8s/ingress.yml
           kubectl apply -f infra/k8s/hpa.yml
@@ -302,24 +285,7 @@ jobs:
           kubectl apply -f infra/k8s/mysql.yml
           kubectl apply -f infra/k8s/backend-ventas.yml
           kubectl apply -f infra/k8s/backend.yml
-          kubectl apply -f - <<'EOF'
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: frontend-despacho
-            namespace: despacho-app
-            annotations:
-              service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
-              service.beta.kubernetes.io/aws-load-balancer-type: nlb
-          spec:
-            selector:
-              app: frontend-despacho
-            ports:
-              - name: http
-                port: 80
-                targetPort: http
-            type: LoadBalancer
-          EOF
+          kubectl apply -f infra/k8s/frontend-service.yml
           kubectl apply -f infra/k8s/frontend.yml
           kubectl apply -f infra/k8s/ingress.yml
           kubectl apply -f infra/k8s/hpa.yml
