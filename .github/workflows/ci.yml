@@ -247,6 +247,7 @@ jobs:
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
+          kubectl create namespace despacho-app --dry-run=client -o yaml | kubectl apply -f -
           kubectl apply -f - <<'EOF'
           apiVersion: v1
           kind: Service
@@ -256,6 +257,7 @@ jobs:
             annotations:
               service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
               service.beta.kubernetes.io/aws-load-balancer-type: nlb
+              service.beta.kubernetes.io/aws-load-balancer-healthcheck-path: /
           spec:
             selector:
               app: frontend-despacho
@@ -265,11 +267,16 @@ jobs:
                 targetPort: http
             type: LoadBalancer
           EOF
+          kubectl patch service frontend-despacho -n despacho-app --type='merge' -p '{"metadata":{"annotations":{"service.beta.kubernetes.io/aws-load-balancer-scheme":"internet-facing","service.beta.kubernetes.io/aws-load-balancer-type":"nlb","service.beta.kubernetes.io/aws-load-balancer-healthcheck-path":"/"}}}' || true
           sed -e "s|\${ACCOUNT_ID}|${{ steps.account.outputs.account_id }}|g" \
               -e "s|\${AWS_REGION}|${{ env.AWS_REGION }}|g" \
               -e "s|\${IMAGE_TAG}|${{ env.IMAGE_TAG }}|g" \
               infra/k8s/frontend.yml | kubectl apply -f -
           echo "Frontend desplegado como LoadBalancer"
+          echo "--- Servicios tras aplicar frontend ---"
+          kubectl -n despacho-app get svc frontend-despacho -o wide || true
+          echo "--- Pods del frontend ---"
+          kubectl -n despacho-app get pods -l app=frontend-despacho -o wide || true
 
       - name: Install AWS Load Balancer Controller
         if: steps.kubeconfig.outputs.status == 'success'
@@ -277,17 +284,23 @@ jobs:
         run: |
           if ! kubectl get deployment -n kube-system aws-load-balancer-controller &>/dev/null; then
             echo "Instalando AWS Load Balancer Controller..."
-            helm repo add eks https://aws.github.io/eks-charts
-            helm repo update
+            helm repo add eks https://aws.github.io/eks-charts || true
+            helm repo update || true
             helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
               -n kube-system \
               --set clusterName=${{ env.EKS_CLUSTER_NAME }} \
               --set serviceAccount.create=true \
-              --wait --timeout 5m || true
-            sleep 10
+              --set region=${{ env.AWS_REGION }} \
+              --set vpcId=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=*" --query 'Vpcs[0].VpcId' --output text 2>/dev/null || echo "") \
+              --wait --timeout 10m || true
+            sleep 20
           else
             echo "AWS Load Balancer Controller ya existe"
           fi
+
+          echo "--- Estado del controlador ---"
+          kubectl get deployment -n kube-system aws-load-balancer-controller || true
+          kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller || true
 
       - name: Deploy Ingress
         if: steps.kubeconfig.outputs.status == 'success'
@@ -377,28 +390,28 @@ jobs:
         run: |
           echo "Obteniendo URL del Frontend desde el LoadBalancer..."
           echo ""
+          kubectl -n despacho-app get svc frontend-despacho -o wide || true
+          kubectl -n despacho-app describe svc frontend-despacho || true
+          echo ""
+
           for i in {1..12}; do
-            if kubectl -n despacho-app get svc frontend-despacho >/dev/null 2>&1; then
-              break
+            FRONTEND_HOSTNAME=$(kubectl -n despacho-app get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+            FRONTEND_IP=$(kubectl -n despacho-app get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+
+            if [ -n "$FRONTEND_HOSTNAME" ] || [ -n "$FRONTEND_IP" ]; then
+              if [ -n "$FRONTEND_HOSTNAME" ]; then
+                echo "URL del Frontend (LoadBalancer): http://$FRONTEND_HOSTNAME"
+              else
+                echo "URL del Frontend (IP): http://$FRONTEND_IP"
+              fi
+              exit 0
             fi
-            echo "Esperando a que aparezca el servicio frontend-despacho... ($i/12)"
+
+            echo "Esperando a que el LoadBalancer asigne una dirección pública... ($i/12)"
             sleep 10
           done
 
-          if kubectl -n despacho-app get svc frontend-despacho >/dev/null 2>&1; then
-            kubectl -n despacho-app get svc frontend-despacho
-            echo ""
-            FRONTEND_HOSTNAME=$(kubectl -n despacho-app get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
-            FRONTEND_IP=$(kubectl -n despacho-app get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
-            
-            if [ -n "$FRONTEND_HOSTNAME" ]; then
-              echo "URL del Frontend (LoadBalancer): http://$FRONTEND_HOSTNAME"
-            elif [ -n "$FRONTEND_IP" ]; then
-              echo "URL del Frontend (IP): http://$FRONTEND_IP"
-            else
-              echo "El LoadBalancer aún no tiene asignada una dirección pública"
-              echo "   Espera unos minutos y verifica con: kubectl -n despacho-app get svc frontend-despacho -w"
-            fi
-          else
-            echo "El servicio frontend-despacho aún no existe. Verifica el despliegue del frontend."
-          fi
+          echo "El LoadBalancer aún no tiene asignada una dirección pública"
+          echo "   Verifica con: kubectl -n despacho-app get svc frontend-despacho -w"
+          echo "   Estado actual del servicio:"
+          kubectl -n despacho-app get svc frontend-despacho -o wide || true
