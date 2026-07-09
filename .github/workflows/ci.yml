@@ -191,8 +191,12 @@ jobs:
         id: kubeconfig
         continue-on-error: true
         run: |
-          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}
-          echo "status=success" >> $GITHUB_OUTPUT
+          if aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}; then
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+            exit 1
+          fi
 
       - name: Download Account ID
         continue-on-error: true
@@ -365,34 +369,33 @@ jobs:
           echo "Ingress:"
           kubectl get ingress -n despacho-app
 
-      - name: Obtener URL del Frontend (LoadBalancer)
+      - name: Obtener URL pública del Frontend
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          echo "Obteniendo URL del Frontend desde el LoadBalancer..."
+          echo "Obteniendo URL pública del Frontend desde el Ingress..."
           echo ""
-          kubectl -n despacho-app get svc frontend-despacho -o wide || true
-          kubectl -n despacho-app describe svc frontend-despacho || true
+          kubectl -n despacho-app get ingress despacho-ingress -o wide || true
           echo ""
 
           for i in {1..12}; do
-            FRONTEND_HOSTNAME=$(kubectl -n despacho-app get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
-            FRONTEND_IP=$(kubectl -n despacho-app get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+            FRONTEND_HOSTNAME=$(kubectl -n despacho-app get ingress despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+            FRONTEND_IP=$(kubectl -n despacho-app get ingress despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
 
             if [ -n "$FRONTEND_HOSTNAME" ] || [ -n "$FRONTEND_IP" ]; then
               if [ -n "$FRONTEND_HOSTNAME" ]; then
-                echo "URL del Frontend (LoadBalancer): http://$FRONTEND_HOSTNAME"
+                echo "URL pública del Frontend: http://$FRONTEND_HOSTNAME"
               else
-                echo "URL del Frontend (IP): http://$FRONTEND_IP"
+                echo "URL pública del Frontend: http://$FRONTEND_IP"
               fi
               exit 0
             fi
 
-            echo "Esperando a que el LoadBalancer asigne una dirección pública... ($i/12)"
+            echo "Esperando a que el Ingress/ALB asigne una dirección pública... ($i/12)"
             sleep 10
           done
 
-          echo "El LoadBalancer aún no tiene asignada una dirección pública"
-          echo "   Verifica con: kubectl -n despacho-app get svc frontend-despacho -w"
-          echo "   Estado actual del servicio:"
-          kubectl -n despacho-app get svc frontend-despacho -o wide || true
+          echo "El Ingress/ALB aún no tiene asignada una dirección pública"
+          echo "   Verifica con: kubectl -n despacho-app get ingress despacho-ingress -w"
+          echo "   Estado actual del ingress:"
+          kubectl -n despacho-app get ingress despacho-ingress -o wide || true

@@ -203,10 +203,17 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Update kubeconfig
+        id: kubeconfig
+        continue-on-error: true
         run: |
-          aws eks update-kubeconfig \
+          if aws eks update-kubeconfig \
             --region ${{ env.AWS_REGION }} \
-            --name ${{ env.CLUSTER_NAME }}
+            --name ${{ env.CLUSTER_NAME }}; then
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+            exit 1
+          fi
 
       - name: Deploy to EKS (Dev)
         env:
@@ -261,10 +268,17 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Update kubeconfig
+        id: kubeconfig
+        continue-on-error: true
         run: |
-          aws eks update-kubeconfig \
+          if aws eks update-kubeconfig \
             --region ${{ env.AWS_REGION }} \
-            --name ${{ env.CLUSTER_NAME }}
+            --name ${{ env.CLUSTER_NAME }}; then
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+            exit 1
+          fi
 
       - name: Deploy to EKS (Prod)
         env:
