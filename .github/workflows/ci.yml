@@ -80,7 +80,6 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
@@ -146,7 +145,6 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Install kubectl
@@ -217,7 +215,7 @@ jobs:
               -e "s|\${IMAGE_TAG}|${{ env.IMAGE_TAG }}|g" \
               infra/k8s/backend-ventas.yml | kubectl apply -f -
 
-      - name: Deploy Frontend
+      - name: Deploy Frontend Deployment
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
@@ -225,6 +223,12 @@ jobs:
               -e "s|\${AWS_REGION}|${{ env.AWS_REGION }}|g" \
               -e "s|\${IMAGE_TAG}|${{ env.IMAGE_TAG }}|g" \
               infra/k8s/frontend.yml | kubectl apply -f -
+
+      - name: Deploy Frontend Service
+        if: steps.kubeconfig.outputs.status == 'success'
+        continue-on-error: true
+        run: |
+          kubectl apply -f infra/k8s/frontend-service.yml
 
       - name: Deploy Ingress
         if: steps.kubeconfig.outputs.status == 'success'
@@ -240,9 +244,23 @@ jobs:
           kubectl get svc -n despacho-app
           kubectl get ingress -A
 
-      - name: Obtener URL del Frontend (LoadBalancer)
+      - name: Obtener URL del Frontend (Ingress)
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          kubectl get svc frontend-despacho -n despacho-app
-          kubectl get service frontend-despacho -n despacho-app -o jsonpath='(.status.loadbalancer.ingress[0].hostname)' || echo "Buscando dirección..."
+          echo "Buscando URL pública del Ingress..."
+          for i in {1..30}; do
+            HOSTNAME=$(kubectl -n despacho-app get ingress despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+            IP=$(kubectl -n despacho-app get ingress despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+            if [ -n "$HOSTNAME" ]; then
+              echo "Frontend disponible: http://$HOSTNAME"
+              exit 0
+            elif [ -n "$IP" ]; then
+              echo "Frontend disponible: http://$IP"
+              exit 0
+            fi
+            echo "Intento $i/30 - esperando dirección pública del Ingress..."
+            sleep 10
+          done
+          echo "No se pudo obtener la URL pública del Ingress."
+          kubectl -n despacho-app get ingress despacho-ingress -o yaml || true

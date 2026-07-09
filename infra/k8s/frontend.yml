@@ -52,20 +52,3 @@ spec:
             limits:
               memory: "256Mi"
               cpu: "500m"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: frontend-despacho
-  namespace: despacho-app
-  annotations:
-    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
-    service.beta.kubernetes.io/aws-load-balancer-type: nlb
-spec:
-  selector:
-    app: frontend-despacho
-  ports:
-    - name: http
-      port: 80
-      targetPort: http
-  type: LoadBalancer

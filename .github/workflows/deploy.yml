@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - develop
+      - devops
   pull_request:
     branches:
       - main
@@ -202,6 +203,12 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+
       - name: Update kubeconfig
         id: kubeconfig
         continue-on-error: true
@@ -249,6 +256,25 @@ jobs:
           kubectl -n despacho-app get all
           kubectl -n despacho-app get ingress
 
+      - name: Obtener URL pública del Frontend
+        run: |
+          echo "Buscando URL pública del Ingress..."
+          for i in {1..30}; do
+            HOSTNAME=$(kubectl -n despacho-app get ingress despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+            IP=$(kubectl -n despacho-app get ingress despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+            if [ -n "$HOSTNAME" ]; then
+              echo "Frontend disponible: http://$HOSTNAME"
+              exit 0
+            elif [ -n "$IP" ]; then
+              echo "Frontend disponible: http://$IP"
+              exit 0
+            fi
+            echo "Intento $i/30 - esperando dirección pública del Ingress..."
+            sleep 10
+          done
+          echo "No se pudo obtener la URL pública del Ingress."
+          kubectl -n despacho-app get ingress despacho-ingress -o yaml || true
+
   # Job 6: Deploy a producción
   deploy-prod:
     name: Deploy a Producción
@@ -266,6 +292,12 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
 
       - name: Update kubeconfig
         id: kubeconfig
@@ -313,6 +345,25 @@ jobs:
         run: |
           kubectl -n despacho-app get all
           kubectl -n despacho-app get ingress
+
+      - name: Obtener URL pública del Frontend
+        run: |
+          echo "Buscando URL pública del Ingress..."
+          for i in {1..30}; do
+            HOSTNAME=$(kubectl -n despacho-app get ingress despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+            IP=$(kubectl -n despacho-app get ingress despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+            if [ -n "$HOSTNAME" ]; then
+              echo "Frontend disponible: http://$HOSTNAME"
+              exit 0
+            elif [ -n "$IP" ]; then
+              echo "Frontend disponible: http://$IP"
+              exit 0
+            fi
+            echo "Intento $i/30 - esperando dirección pública del Ingress..."
+            sleep 10
+          done
+          echo "No se pudo obtener la URL pública del Ingress."
+          kubectl -n despacho-app get ingress despacho-ingress -o yaml || true
 
       - name: Notificar éxito
         uses: actions/github-script@v6

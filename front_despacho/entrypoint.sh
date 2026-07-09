@@ -1,4 +1,4 @@
-!/bin/sh
+#!/bin/sh
 set -eu
 
 # Set default values for backend hosts

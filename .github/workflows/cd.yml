@@ -8,7 +8,7 @@ on:
 env:
   AWS_REGION: us-east-1
   CLUSTER_NAME: despachos-cluster   # Nombre del clúster EKS (definido en Terraform)
-  NAMESPACE: default
+  NAMESPACE: despacho-app
 
 jobs:
   deploy:
@@ -55,7 +55,6 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login en ECR
@@ -220,20 +219,26 @@ jobs:
           echo ""
           FRONTEND_URL=""
           for i in {1..30}; do
-            FRONTEND_URL=$(kubectl get ingress despacho-ingress -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+            FRONTEND_HOSTNAME=$(kubectl get ingress despacho-ingress -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+            FRONTEND_IP=$(kubectl get ingress despacho-ingress -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+            if [ -n "$FRONTEND_HOSTNAME" ]; then
+              FRONTEND_URL="http://$FRONTEND_HOSTNAME"
+            elif [ -n "$FRONTEND_IP" ]; then
+              FRONTEND_URL="http://$FRONTEND_IP"
+            fi
             if [ -n "$FRONTEND_URL" ]; then
               echo "URL PÚBLICA DISPONIBLE (SIN CONTRASEÑA):"
               echo ""
-              echo "   Frontend:        http://$FRONTEND_URL"
-              echo "   API Ventas:      http://$FRONTEND_URL/api/ventas/"
-              echo "   API Despachos:   http://$FRONTEND_URL/api/despachos/"
+              echo "   Frontend:        $FRONTEND_URL"
+              echo "   API Ventas:      $FRONTEND_URL/api/ventas/"
+              echo "   API Despachos:   $FRONTEND_URL/api/despachos/"
               echo ""
               echo "La aplicación está lista para usar"
               echo "   ✓ Frontend accesible públicamente"
               echo "   ✓ Sin autenticación requerida"
               echo "   ✓ Backends respondiendo"
               echo ""
-              echo "frontend_url=http://$FRONTEND_URL" >> $GITHUB_OUTPUT
+              echo "frontend_url=$FRONTEND_URL" >> $GITHUB_OUTPUT
               exit 0
             fi
             if [ $((i % 5)) -eq 0 ]; then
@@ -251,34 +256,6 @@ jobs:
           echo "   O para obtener solo la URL:"
           echo "   kubectl -n despacho-app get ingress despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'"
           exit 0
-
-      - name: Obtener URL pública del Frontend
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
-        run: |
-          echo "Obteniendo URL pública del Frontend desde el Ingress..."
-          kubectl -n despacho-app get ingress despacho-ingress -o wide || true
-          echo ""
-
-          for i in {1..12}; do
-            FRONTEND_HOSTNAME=$(kubectl -n despacho-app get ingress despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
-            FRONTEND_IP=$(kubectl -n despacho-app get ingress despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
-
-            if [ -n "$FRONTEND_HOSTNAME" ] || [ -n "$FRONTEND_IP" ]; then
-              if [ -n "$FRONTEND_HOSTNAME" ]; then
-                echo "URL pública del Frontend: http://$FRONTEND_HOSTNAME"
-              else
-                echo "URL pública del Frontend: http://$FRONTEND_IP"
-              fi
-              exit 0
-            fi
-
-            echo "Esperando a que el Ingress/ALB asigne una dirección pública... ($i/12)"
-            sleep 10
-          done
-
-          echo "El Ingress/ALB aún no tiene asignada una dirección pública"
-          echo "   Verifica con: kubectl -n despacho-app get ingress despacho-ingress -w"
 
       - name: Cluster EKS no disponible - Instrucciones
         if: steps.check-cluster.outputs.status == 'not-available'
