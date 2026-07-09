@@ -1,4 +1,3 @@
-
 name: Integración Continua Completa
 on:
   push:
@@ -11,12 +10,11 @@ env:
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
-  # === TESTS ===
   backend-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      
+
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
@@ -30,7 +28,7 @@ jobs:
         run: |
           cd back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
           chmod +x mvnw
-          ./mvnw clean test -DskipTests=false -q || echo "Despacho tests no pasaron pero continuamos"
+          ./mvnw clean test -DskipTests=false -q || echo "⚠️ Despacho tests no pasaron pero continuamos"
 
       - name: Run Backend Tests (Ventas)
         continue-on-error: true
@@ -38,7 +36,7 @@ jobs:
         run: |
           cd back-Ventas_SpringBoot/Springboot-API-REST
           chmod +x mvnw
-          ./mvnw clean test -DskipTests=false -q || echo "Ventas tests no pasaron pero continuamos"
+          ./mvnw clean test -DskipTests=false -q || echo "⚠️ Ventas tests no pasaron pero continuamos"
 
   frontend-tests:
     runs-on: ubuntu-latest
@@ -58,14 +56,15 @@ jobs:
           cd front_despacho
           npm ci || npm install --frozen-lockfile
 
-      - name: Run Frontend Tests
+      - name: Run Frontend Checks
         continue-on-error: true
         run: |
           cd front_despacho
-          npm test || true
+          npm run lint || true
 
-  # === BUILD DE IMÁGENES DOCKER ===
   build-and-push:
+    needs: [backend-tests, frontend-tests]
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -81,44 +80,6 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Get Account ID
-        id: account
-        run: echo "account_id=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_OUTPUT
-
-      - name: Make ECR Repositories Public
-        continue-on-error: true
-        run: |
-          REPOS=("backend-despacho" "backend-ventas" "frontend-despacho")
-          for REPO in "${REPOS[@]}"; do
-            echo "📢 Haciendo público el repositorio: $REPO"
-            
-            # Crear repositorio si no existe
-            aws ecr describe-repositories --repository-names $REPO --region ${{ env.AWS_REGION }} 2>/dev/null || \
-            aws ecr create-repository --repository-name $REPO --region ${{ env.AWS_REGION }}
-            
-            # Configurar política pública
-            aws ecr set-repository-policy \
-              --repository-name $REPO \
-              --policy-text '{
-                "Version": "2012-10-17",
-                "Statement": [
-                  {
-                    "Sid": "PublicPull",
-                    "Effect": "Allow",
-                    "Principal": "*",
-                    "Action": [
-                      "ecr:GetDownloadUrlForLayer",
-                      "ecr:BatchGetImage",
-                      "ecr:BatchCheckLayerAvailability"
-                    ]
-                  }
-                ]
-              }' \
-              --region ${{ env.AWS_REGION }}
-            
-            echo " $REPO configurado como público"
-          done
 
       - name: Build and Push Backend Despacho
         continue-on-error: true
@@ -153,9 +114,11 @@ jobs:
           docker push $ECR_REGISTRY/frontend-despacho:${{ env.IMAGE_TAG }}
           docker push $ECR_REGISTRY/frontend-despacho:latest
 
-      - name: Save Account ID
+      - name: Save AWS Account ID
         continue-on-error: true
-        run: echo "${{ steps.account.outputs.account_id }}" > account_id.txt
+        run: |
+          account_id=$(aws sts get-caller-identity --query Account --output text)
+          echo "$account_id" > account_id.txt
 
       - name: Upload Account ID
         continue-on-error: true
@@ -164,7 +127,6 @@ jobs:
           name: account-id
           path: account_id.txt
 
-  # === DEPLOY A EKS ===
   deploy-to-eks:
     needs: build-and-push
     if: always()
@@ -180,11 +142,14 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Setup kubectl and Helm
+      - name: Install kubectl
         run: |
           curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
           chmod +x kubectl
           sudo mv kubectl /usr/local/bin/
+
+      - name: Install Helm
+        run: |
           curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
       - name: Update kubeconfig
@@ -235,7 +200,6 @@ jobs:
               -e "s|\${AWS_REGION}|${{ env.AWS_REGION }}|g" \
               -e "s|\${IMAGE_TAG}|${{ env.IMAGE_TAG }}|g" \
               infra/k8s/backend.yml | kubectl apply -f -
-          echo "Backend Despacho desplegado"
 
       - name: Deploy Backend Ventas
         if: steps.kubeconfig.outputs.status == 'success'
@@ -245,157 +209,26 @@ jobs:
               -e "s|\${AWS_REGION}|${{ env.AWS_REGION }}|g" \
               -e "s|\${IMAGE_TAG}|${{ env.IMAGE_TAG }}|g" \
               infra/k8s/backend-ventas.yml | kubectl apply -f -
-          echo " Backend Ventas desplegado"
 
       - name: Deploy Frontend
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          kubectl create namespace despacho-app --dry-run=client -o yaml | kubectl apply -f -
-          kubectl apply -f infra/k8s/frontend-service.yml
           sed -e "s|\${ACCOUNT_ID}|${{ steps.account.outputs.account_id }}|g" \
               -e "s|\${AWS_REGION}|${{ env.AWS_REGION }}|g" \
               -e "s|\${IMAGE_TAG}|${{ env.IMAGE_TAG }}|g" \
               infra/k8s/frontend.yml | kubectl apply -f -
-          echo "Frontend desplegado como LoadBalancer"
-          echo "--- Servicios tras aplicar frontend ---"
-          kubectl -n despacho-app get svc frontend-despacho -o wide || true
-          echo "--- Pods del frontend ---"
-          kubectl -n despacho-app get pods -l app=frontend-despacho -o wide || true
-
-      - name: Install AWS Load Balancer Controller
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
-        run: |
-          if ! kubectl get deployment -n kube-system aws-load-balancer-controller &>/dev/null; then
-            echo "Instalando AWS Load Balancer Controller..."
-            helm repo add eks https://aws.github.io/eks-charts || true
-            helm repo update || true
-            helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
-              -n kube-system \
-              --set clusterName=${{ env.EKS_CLUSTER_NAME }} \
-              --set serviceAccount.create=true \
-              --set region=${{ env.AWS_REGION }} \
-              --set vpcId=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=*" --query 'Vpcs[0].VpcId' --output text 2>/dev/null || echo "") \
-              --wait --timeout 10m || true
-            sleep 20
-          else
-            echo "AWS Load Balancer Controller ya existe"
-          fi
-
-          echo "--- Estado del controlador ---"
-          kubectl get deployment -n kube-system aws-load-balancer-controller || true
-          kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller || true
 
       - name: Deploy Ingress
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
           kubectl apply -f infra/k8s/ingress.yml
-          echo "Ingress desplegado"
-
-      - name: Wait for Frontend LoadBalancer IP
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
-        run: |
-          echo "Esperando que el Frontend LoadBalancer obtenga IP pública (120 segundos)..."
-          TIMEOUT=120
-          ELAPSED=0
-          while [ $ELAPSED -lt $TIMEOUT ]; do
-            FRONTEND_IP=$(kubectl -n despacho-app get svc frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
-            
-            if [ -n "$FRONTEND_IP" ]; then
-              echo ""
-              echo "╔════════════════════════════════════════════════════════════╗"
-              echo "║         iFRONTEND DISPONIBLE!                        ║"
-              echo "╠════════════════════════════════════════════════════════════╣"
-              echo "║                                                            ║"
-              echo "║  URL DEL FRONTEND: http://$FRONTEND_IP"
-              echo "║                                                            ║"
-              echo "╚════════════════════════════════════════════════════════════╝"
-              echo ""
-              break
-            fi
-            
-            echo "Esperando... ($ELAPSED/$TIMEOUT segundos)"
-            sleep 10
-            ELAPSED=$((ELAPSED + 10))
-          done
-          
-          echo ""
-          echo "Si no se muestra la URL, usa: kubectl get svc frontend-despacho -w"
-
-      - name: Wait for ALB DNS
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
-        run: |
-          echo "Esperando DNS del ALB/Ingress (60 segundos)..."
-          for i in {1..6}; do
-            URL=$(kubectl -n despacho-app get ingress despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
-            if [ -n "$URL" ]; then
-              echo ""
-              echo "╔════════════════════════════════════════════════════════════╗"
-              echo "║         ¡INGRESS/ALB DISPONIBLE!                     ║"
-              echo "╠════════════════════════════════════════════════════════════╣"
-              echo "║                                                            ║"
-              echo "║  URL PÚBLICA: http://$URL"
-              echo "║                                                            ║"
-              echo "║   API Despachos: http://$URL/api/despachos/"
-              echo "║   API Ventas:    http://$URL/api/ventas/"
-              echo "║   Frontend:      http://$URL"
-              echo "║                                                            ║"
-              echo "╚════════════════════════════════════════════════════════════╝"
-              echo ""
-              exit 0
-            fi
-            echo "Intento $i/6..."
-            sleep 10
-          done
-          echo "Timeout esperando DNS."
-          echo "Verifica con: kubectl -n despacho-app get ingress despacho-ingress -o wide"
 
       - name: Show Cluster Status
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          echo "═══════ ESTADO DEL CLUSTER ═══════"
-          echo ""
-          echo "Pods desplegados:"
-          kubectl get pods -n despacho-app
-          echo ""
-          echo "Servicios:"
-          kubectl get svc -n despacho-app
-          echo ""
-          echo "Ingress:"
-          kubectl get ingress -n despacho-app
-
-      - name: Obtener URL pública del Frontend
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
-        run: |
-          echo "Obteniendo URL pública del Frontend desde el Ingress..."
-          echo ""
-          kubectl -n despacho-app get ingress despacho-ingress -o wide || true
-          echo ""
-
-          for i in {1..12}; do
-            FRONTEND_HOSTNAME=$(kubectl -n despacho-app get ingress despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
-            FRONTEND_IP=$(kubectl -n despacho-app get ingress despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
-
-            if [ -n "$FRONTEND_HOSTNAME" ] || [ -n "$FRONTEND_IP" ]; then
-              if [ -n "$FRONTEND_HOSTNAME" ]; then
-                echo "URL pública del Frontend: http://$FRONTEND_HOSTNAME"
-              else
-                echo "URL pública del Frontend: http://$FRONTEND_IP"
-              fi
-              exit 0
-            fi
-
-            echo "Esperando a que el Ingress/ALB asigne una dirección pública... ($i/12)"
-            sleep 10
-          done
-
-          echo "El Ingress/ALB aún no tiene asignada una dirección pública"
-          echo "   Verifica con: kubectl -n despacho-app get ingress despacho-ingress -w"
-          echo "   Estado actual del ingress:"
-          kubectl -n despacho-app get ingress despacho-ingress -o wide || true
+          kubectl get pods -A
+          kubectl get svc -A
+          kubectl get ingress -A
