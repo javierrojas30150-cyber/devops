@@ -35,11 +35,17 @@ jobs:
           terraform validate
 
       - name: Validar Docker Compose
-        run: docker-compose config
+        run: |
+          if command -v docker-compose >/dev/null 2>&1; then
+            docker-compose config
+          else
+            docker compose config
+          fi
 
       - name: Validar Kubernetes
         run: |
           curl -L https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz | tar xz
+          chmod +x kubeval
           for file in infra/k8s/*.yml; do
             ./kubeval "$file" || exit 1
           done
@@ -69,12 +75,19 @@ jobs:
         run: |
           mvn clean package -DskipTests
 
+      - name: Clear AWS session token
+        run: |
+          unset AWS_SESSION_TOKEN || true
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validate AWS credentials
+        run: aws sts get-caller-identity --query Arn --output text
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -115,12 +128,19 @@ jobs:
         run: |
           mvn clean package -DskipTests
 
+      - name: Clear AWS session token
+        run: |
+          unset AWS_SESSION_TOKEN || true
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validate AWS credentials
+        run: aws sts get-caller-identity --query Arn --output text
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -164,12 +184,19 @@ jobs:
         working-directory: ./front_despacho
         run: npm run build
 
+      - name: Clear AWS session token
+        run: |
+          unset AWS_SESSION_TOKEN || true
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validate AWS credentials
+        run: aws sts get-caller-identity --query Arn --output text
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -196,12 +223,19 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Clear AWS session token
+        run: |
+          unset AWS_SESSION_TOKEN || true
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validate AWS credentials
+        run: aws sts get-caller-identity --query Arn --output text
 
       - name: Install kubectl
         run: |
@@ -286,12 +320,19 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Clear AWS session token
+        run: |
+          unset AWS_SESSION_TOKEN || true
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validate AWS credentials
+        run: aws sts get-caller-identity --query Arn --output text
 
       - name: Install kubectl
         run: |

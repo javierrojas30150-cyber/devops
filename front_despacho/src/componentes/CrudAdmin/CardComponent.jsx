@@ -1,4 +1,4 @@
-import React from "react";
+import PropTypes from "prop-types";
 
 export const CardComponent = ({ title, description, buttonText, onClick }) => {
   return (
@@ -36,4 +36,11 @@ export const CardComponent = ({ title, description, buttonText, onClick }) => {
       </div>
     </div>
   );
+};
+
+CardComponent.propTypes = {
+  title: PropTypes.string.isRequired,
+  description: PropTypes.string.isRequired,
+  buttonText: PropTypes.string.isRequired,
+  onClick: PropTypes.func.isRequired,
 };

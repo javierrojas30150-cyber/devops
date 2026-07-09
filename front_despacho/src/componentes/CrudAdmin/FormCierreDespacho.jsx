@@ -1,4 +1,5 @@
 import { useForm } from "react-hook-form";
+import PropTypes from "prop-types";
 import Swal from "sweetalert2";
 import axios from "axios";
 import { API_DESPACHOS, jsonHeaders } from "../../config/api";
@@ -112,4 +113,16 @@ export const FormCierreDespacho = ({ despacho, onClose }) => {
       </button>
     </form>
   );
+};
+
+FormCierreDespacho.propTypes = {
+  despacho: PropTypes.shape({
+    idDespacho: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    fechaDespacho: PropTypes.string,
+    idCompra: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    intento: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    despachado: PropTypes.bool,
+    patenteCamion: PropTypes.string,
+  }).isRequired,
+  onClose: PropTypes.func.isRequired,
 };
