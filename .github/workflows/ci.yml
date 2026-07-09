@@ -236,13 +236,13 @@ jobs:
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          kubectl get pods -A
-          kubectl get svc -A
+          kubectl get pods -n despacho-app
+          kubectl get svc -n despacho-app
           kubectl get ingress -A
 
       - name: Obtener URL del Frontend (LoadBalancer)
         if: steps.kubeconfig.outputs.status == 'success'
         continue-on-error: true
         run: |
-          kubectl get svc frontend-despacho
-          kubectl get service frontend-despacho -o jsonpath='(.status.loadbalancer.ingress[0].hostname)' || echo "Buscando dirección..."
+          kubectl get svc frontend-despacho -n despacho-app
+          kubectl get service frontend-despacho -n despacho-app -o jsonpath='(.status.loadbalancer.ingress[0].hostname)' || echo "Buscando dirección..."
