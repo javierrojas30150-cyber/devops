@@ -1,4 +1,7 @@
 name: Integración Continua Completa
+# Este workflow se ejecuta cuando hay push a la rama 'devops'.
+# Define las pruebas de backend y frontend, la construcción de imágenes Docker
+# y el despliegue en EKS.
 on:
   push:
     branches:
@@ -12,6 +15,7 @@ env:
 jobs:
   backend-tests:
     runs-on: ubuntu-latest
+    # Prueba los dos microservicios Java usando Maven.
     steps:
       - uses: actions/checkout@v5
 
@@ -40,6 +44,7 @@ jobs:
 
   frontend-tests:
     runs-on: ubuntu-latest
+    # Prueba de frontend: instala dependencias y ejecuta lint.
     steps:
       - uses: actions/checkout@v5
 
@@ -64,6 +69,7 @@ jobs:
 
   build-and-push:
     needs: [backend-tests, frontend-tests]
+    # Construye las imágenes Docker y las sube a Amazon ECR.
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -129,6 +135,7 @@ jobs:
 
   deploy-to-eks:
     needs: build-and-push
+    # Despliega las aplicaciones en el clúster de EKS.
     if: always()
     runs-on: ubuntu-latest
     steps:
