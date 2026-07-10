@@ -1,5 +1,9 @@
 name: Despliegue Continuo
 
+permissions:
+  id-token: write
+  contents: read
+
 on:
   push:
     branches:
@@ -19,7 +23,15 @@ jobs:
         uses: actions/checkout@v4
 
       # --- 2. CONFIGURAR CREDENCIALES AWS ACADEMY ---
-      - name: Configure AWS Credentials
+      - name: Configure AWS credentials (OIDC if available)
+        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' }}
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure AWS credentials (access keys fallback)
+        if: ${{ secrets.AWS_ROLE_TO_ASSUME == '' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -35,6 +47,16 @@ jobs:
         run: |
           echo "ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_ENV
           echo "ECR_REGISTRY=$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com" >> $GITHUB_ENV
+
+      - name: Validate AWS credentials
+        run: |
+          echo "Validating AWS credentials..."
+          if aws sts get-caller-identity >/dev/null 2>&1; then
+            aws sts get-caller-identity || true
+          else
+            echo "ERROR: AWS credentials invalid or missing. Ensure AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY or OIDC role are configured." >&2
+            exit 1
+          fi
 
       # --- 3. BUILD Y PUSH DOCKER ---
       - name: Build y Push Imágenes
@@ -52,9 +74,37 @@ jobs:
           docker push $ECR_REGISTRY/innovatech-frontend:${{ github.sha }}
 
       # --- 4. CONECTAR CON EKS ---
-      - name: Update Kubeconfig for EKS
+      - name: Update Kubeconfig for EKS (with retries & diagnostics)
         run: |
-          aws eks update-kubeconfig --name ${{ env.CLUSTER }} --region ${{ env.AWS_REGION }}
+          set -euo pipefail
+          echo "Updating kubeconfig for EKS cluster ${{ env.CLUSTER }} in ${{ env.AWS_REGION }}"
+          ATTEMPTS=3
+          i=0
+          until [ $i -ge $ATTEMPTS ]
+          do
+            if aws eks update-kubeconfig --name "${{ env.CLUSTER }}" --region "${{ env.AWS_REGION }}"; then
+              echo "kubeconfig updated"
+              break
+            else
+              echo "Attempt $((i+1))/$ATTEMPTS: update-kubeconfig failed, retrying in 5s..."
+              sleep 5
+            fi
+            i=$((i+1))
+          done
+          if [ $i -ge $ATTEMPTS ]; then
+            echo "ERROR: update-kubeconfig failed after $ATTEMPTS attempts" >&2
+            echo "Describe cluster for diagnostics:"
+            aws eks describe-cluster --name "${{ env.CLUSTER }}" --region "${{ env.AWS_REGION }}" || true
+            echo "Current KUBECONFIG content (if any):"
+            if [ -f ~/.kube/config ]; then
+              sed -n '1,120p' ~/.kube/config || true
+            else
+              echo "~/.kube/config not found"
+            fi
+            exit 1
+          fi
+          # ensure kubectl can reach the cluster
+          kubectl version --short || true
 
       # --- 5. DESPLIEGUE EN KUBERNETES ---
       - name: Deploy Secrets and Config
