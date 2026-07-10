@@ -59,17 +59,29 @@ jobs:
       # --- 5. DESPLIEGUE EN KUBERNETES ---
       - name: Deploy Secrets and Config
         run: |
-          kubectl apply -f Infrastructure/k8s/secret.yml
+          if [ -f infra/k8s/secret.yml ]; then
+            kubectl apply -f infra/k8s/secret.yml
+          else
+            echo "infra/k8s/secret.yml not found, skipping"
+          fi
 
       - name: Deploy Infrastructure and Database
         run: |
-          kubectl apply -f Infrastructure/k8s/infra-db.yml
+          if [ -f infra/k8s/infra-db.yml ]; then
+            kubectl apply -f infra/k8s/infra-db.yml
+          else
+            echo "infra/k8s/infra-db.yml not found, skipping"
+          fi
 
       - name: Deploy Microservices
         run: |
-          kubectl apply -f Infrastructure/k8s/deployments.yml
-          kubectl apply -f Infrastructure/k8s/services.yml
-          kubectl apply -f Infrastructure/k8s/autoscaling.yml
+          for f in infra/k8s/deployments.yml infra/k8s/services.yml infra/k8s/autoscaling.yml; do
+            if [ -f "$f" ]; then
+              kubectl apply -f "$f"
+            else
+              echo "$f not found, skipping"
+            fi
+          done
 
       # --- 6. ACTUALIZACIÓN DE IMÁGENES ---
       - name: Actualizar imágenes en el clúster

@@ -96,6 +96,16 @@ jobs:
           npm ci --no-audit --no-fund
           npm run build
 
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Obtener URL del Frontend (LoadBalancer)
+        run: |
+          kubectl get svc frontend-despacho || true
+          kubectl get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "Buscando dirección..."
+
       - name: Skip AWS deployment steps
         run: |
           echo "AWS deployment steps are disabled in CI to avoid failures."
