@@ -5,83 +5,78 @@ variable "aws_region" {
 }
 
 variable "aws_profile" {
-  description = "AWS CLI profile to use; leave empty to use the default credential chain"
+  description = "Perfil de AWS"
   type        = string
-  default     = ""
-}
-
-variable "aws_shared_credentials_file" {
-  description = "Optional path to the AWS shared credentials file"
-  type        = string
-  default     = ""
+  default     = "default"
 }
 
 variable "aws_access_key_id" {
-  description = "AWS Access Key"
+  description = "Access key ID de AWS"
   type        = string
-  sensitive   = true
   default     = ""
 }
 
 variable "aws_secret_access_key" {
-  description = "AWS Secret Key"
+  description = "Secret access key de AWS"
   type        = string
   sensitive   = true
   default     = ""
 }
 
 variable "aws_session_token" {
-  description = "AWS Session Token"
+  description = "Session token de AWS"
   type        = string
   sensitive   = true
   default     = ""
 }
 
+variable "project_name" {
+  description = "Nombre del proyecto"
+  type        = string
+  default     = "innovatech"
+}
+
 variable "eks_cluster_role_name" {
-  description = "IAM role name for EKS cluster"
+  description = "Nombre del rol de EKS cluster"
   type        = string
   default     = ""
 }
 
 variable "eks_nodes_role_name" {
-  description = "IAM role name for EKS nodes"
+  description = "Nombre del rol de nodos de EKS"
   type        = string
   default     = ""
 }
 
 variable "eks_role_tag_filter" {
-  description = "Tag keyword to filter EKS cluster roles dynamically"
+  description = "Filtro de tags para rol de EKS cluster"
   type        = string
   default     = "LabEksClusterRole"
 }
 
 variable "eks_node_tag_filter" {
-  description = "Tag keyword to filter EKS node roles dynamically"
+  description = "Filtro de tags para rol de nodos de EKS"
   type        = string
   default     = "LabEksNodeRole"
 }
 
-# ============================================
-# RDS Variables
-# ============================================
-
 variable "rds_db_name" {
-  description = "Base de datos inicial de RDS"
+  description = "Nombre de la base de datos RDS"
   type        = string
   default     = "despachos_db"
 }
 
 variable "rds_db_username" {
-  description = "Usuario root de RDS MySQL"
+  description = "Usuario de la base de datos RDS"
   type        = string
   default     = "admin"
-  sensitive   = true
 }
 
 variable "rds_db_password" {
-  description = "Contraseña de RDS MySQL"
+  description = "Contraseña de la base de datos RDS"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "rds_instance_class" {
@@ -91,29 +86,25 @@ variable "rds_instance_class" {
 }
 
 variable "rds_allocated_storage" {
-  description = "Almacenamiento asignado a RDS (GB)"
+  description = "Almacenamiento asignado para RDS"
   type        = number
   default     = 20
 }
 
 variable "rds_backup_retention_days" {
-  description = "Días de retención de backups"
+  description = "Días de retención de backups de RDS"
   type        = number
   default     = 30
 }
 
 variable "rds_multi_az" {
-  description = "Habilitar Multi-AZ para RDS"
+  description = "Habilitar RDS Multi-AZ"
   type        = bool
   default     = true
 }
 
-# ============================================
-# Alertas y Monitoreo
-# ============================================
-
 variable "alert_email" {
-  description = "Email para recibir alertas"
+  description = "Correo para alertas"
   type        = string
-  default     = "alerts@example.com"
+  default     = ""
 }

@@ -1,6 +1,7 @@
 import { useForm } from "react-hook-form";
 import Swal from "sweetalert2";
 import axios from "axios";
+import PropTypes from "prop-types";
 import { API_VENTAS, API_DESPACHOS, jsonHeaders } from "../../config/api";
 
 export const FormDespacho = ({ venta, onClose }) => {
@@ -104,4 +105,13 @@ export const FormDespacho = ({ venta, onClose }) => {
       </button>
     </form>
   );
+};
+
+FormDespacho.propTypes = {
+  venta: PropTypes.shape({
+    idVenta: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    direccionCompra: PropTypes.string.isRequired,
+    valorCompra: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+  }).isRequired,
+  onClose: PropTypes.func.isRequired,
 };

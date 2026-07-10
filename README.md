@@ -131,7 +131,7 @@ Sistema integral de gestión de **despachos y ventas** implementado como arquite
 │  │           Amazon ECR (Elastic Container Registry)            │ │
 │  │  ├─ backend-despacho:latest                                 │ │
 │  │  ├─ backend-ventas:latest (futuro)                          │ │
-│  │  └─ frontend-despacho:latest                                │ │
+│  │  └─ innovatech-frontend:latest                              │ │
 │  └───────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────┘
 
@@ -163,7 +163,7 @@ Sistema integral de gestión de **despachos y ventas** implementado como arquite
 Cliente (Internet)
     ↓ HTTP:80
 ALB (Application Load Balancer)
-    ↓ :8080 (Service: frontend-despacho)
+  ↓ :8080 (Service: frontend)
 Pod Nginx (Frontend)
     ↓ /api/despachos → :8081 (Service: backend-despacho)
     ↓ /api/ventas    → :8080 (Service: backend-ventas)
@@ -287,7 +287,7 @@ NAME                 IMAGE                            STATUS       PORTS
 mysql                despachos-devops-mysql          Up 1 min     3306/tcp
 backend-despacho     despachos-devops-backend-desp   Up 30s       0.0.0.0:8081->8081/tcp
 backend-ventas       despachos-devops-backend-venta  Up 20s       0.0.0.0:8080->8080/tcp
-frontend-despacho    despachos-devops-frontend       Up 10s       0.0.0.0:3000->8080/tcp
+frontend    despachos-devops-frontend       Up 10s       0.0.0.0:3000->8080/tcp
 ```
 
 ### Acceder a las aplicaciones
@@ -633,9 +633,9 @@ aws ecr create-repository \
   --repository-name backend-despacho \
   --region $REGION
 
-# Crear repositorio para frontend-despacho
+# Crear repositorio para frontend (ECR)
 aws ecr create-repository \
-  --repository-name frontend-despacho \
+  --repository-name innovatech-frontend \
   --region $REGION
 
 # Crear repositorio para backend-ventas (futuro)
@@ -652,7 +652,7 @@ aws ecr describe-repositories --region $REGION
 ```bash
 # Definir registros
 BACKEND_DESPACHO_IMAGE="$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/backend-despacho:latest"
-FRONTEND_IMAGE="$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/frontend-despacho:latest"
+FRONTEND_IMAGE="$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/innovatech-frontend:latest"
 
 # Construir Backend Despacho
 docker build -t backend-despacho:latest \
@@ -663,7 +663,7 @@ docker build -t backend-despacho:latest \
 docker push $BACKEND_DESPACHO_IMAGE
 
 # Construir Frontend
-docker build -t frontend-despacho:latest \
+docker build -t innovatech-frontend:latest \
   -t $FRONTEND_IMAGE \
   ./front_despacho
 
@@ -672,7 +672,7 @@ docker push $FRONTEND_IMAGE
 
 # Verificar en ECR
 aws ecr describe-images --repository-name backend-despacho --region $REGION
-aws ecr describe-images --repository-name frontend-despacho --region $REGION
+aws ecr describe-images --repository-name innovatech-frontend --region $REGION
 ```
 
 ### PARTE 5: Desplegar en Kubernetes
@@ -699,7 +699,7 @@ kubectl get pods -w
 kubectl get svc -w
 
 # Obtener URL pública del frontend
-FRONTEND_URL=$(kubectl get svc frontend-despacho \
+FRONTEND_URL=$(kubectl get svc frontend \
   -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 echo "Frontend URL: http://$FRONTEND_URL"
 
@@ -707,7 +707,7 @@ echo "Frontend URL: http://$FRONTEND_URL"
 while [ -z "$FRONTEND_URL" ]; do
   echo "Esperando ALB..."
   sleep 10
-  FRONTEND_URL=$(kubectl get svc frontend-despacho \
+  FRONTEND_URL=$(kubectl get svc frontend \
     -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 done
 
@@ -731,11 +731,11 @@ kubectl describe pods
 
 # Ver logs de un pod
 kubectl logs -f deployment/backend-despacho
-kubectl logs -f deployment/frontend-despacho
+kubectl logs -f deployment/frontend
 
 # Ejecutar test desde dentro del cluster
 kubectl run -it --rm debug --image=alpine --restart=Never -- \
-  wget -qO- http://frontend-despacho/
+  wget -qO- http://frontend/
 
 # Acceder interactivamente a un pod
 kubectl exec -it <POD_NAME> -- /bin/bash
@@ -1039,15 +1039,15 @@ kubectl describe pod mysql-0
 
 ```bash
 # Verificar servicio
-kubectl describe svc frontend-despacho
+kubectl describe svc frontend
 
 # Puede tardar 5-10 minutos
 # Esperar con
-watch kubectl get svc frontend-despacho
+watch kubectl get svc frontend
 
 # Si sigue sin IP después de 10 minutos:
-kubectl delete svc frontend-despacho
-kubectl apply -f infra/k8s/frontend.yml
+kubectl delete svc frontend
+kubectl apply -f infra/k8s/services.yml
 ```
 
 ### Limpiar recursos AWS (Peligroso)

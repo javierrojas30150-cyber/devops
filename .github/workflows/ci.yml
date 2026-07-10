@@ -1,280 +1,107 @@
-name: Integración Continua Completa
-# Este workflow se ejecuta cuando hay push a la rama 'devops'.
-# Define las pruebas de backend y frontend, la construcción de imágenes Docker
-# y el despliegue en EKS.
+name: Intregación Continua
+
 on:
   push:
     branches:
       - devops
-
-env:
-  AWS_REGION: us-east-1
-  EKS_CLUSTER_NAME: despachos-cluster
-  IMAGE_TAG: ${{ github.sha }}
-
 jobs:
+  # --- TRABAJO 1: TESTEAR EL BACKEND (JAVA) ---
   backend-tests:
     runs-on: ubuntu-latest
-    # Prueba los dos microservicios Java usando Maven.
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: 'maven'
 
       - name: Run Backend Tests (Despacho)
-        continue-on-error: true
-        timeout-minutes: 15
         run: |
           cd back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
           chmod +x mvnw
-          ./mvnw clean test -DskipTests=false -q || echo "⚠️ Despacho tests no pasaron pero continuamos"
+          ./mvnw test
 
-      - name: Run Backend Tests (Ventas)
-        continue-on-error: true
-        timeout-minutes: 15
+      - name: Run Backend Tests (Venta)
         run: |
           cd back-Ventas_SpringBoot/Springboot-API-REST
           chmod +x mvnw
-          ./mvnw clean test -DskipTests=false -q || echo "⚠️ Ventas tests no pasaron pero continuamos"
+          ./mvnw test
 
+  # --- TRABAJO 2: TESTEAR EL FRONTEND (REACT) ---
   frontend-tests:
     runs-on: ubuntu-latest
-    # Prueba de frontend: instala dependencias y ejecuta lint.
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '20'
           cache: 'npm'
           cache-dependency-path: './front_despacho/package-lock.json'
 
       - name: Install Dependencies
-        continue-on-error: true
         run: |
           cd front_despacho
-          npm ci || npm install --frozen-lockfile
+          npm install
 
-      - name: Run Frontend Checks
-        continue-on-error: true
+      - name: Run Frontend Tests
         run: |
           cd front_despacho
-          npm run lint || true
-
-  build-and-push:
-    needs: [backend-tests, frontend-tests]
-    # Construye las imágenes Docker y las sube a Amazon ECR.
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Clear AWS session token
-        run: |
-          unset AWS_SESSION_TOKEN || true
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v5
+          npm test
+      
+      # --- 3. COMPILACIÓN DE AMBOS BACKENDS (JAVA/MAVEN) ---
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
 
-      - name: Validate AWS credentials
-        run: aws sts get-caller-identity --query Arn --output text
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build and Push Backend Despacho
-        continue-on-error: true
+      - name: Build Backends JARs
         run: |
-          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
-          docker build -t $ECR_REGISTRY/backend-despacho:${{ env.IMAGE_TAG }} \
-            -t $ECR_REGISTRY/backend-despacho:latest \
-            -f back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO/Dockerfile \
-            back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
-          docker push $ECR_REGISTRY/backend-despacho:${{ env.IMAGE_TAG }}
-          docker push $ECR_REGISTRY/backend-despacho:latest
-
-      - name: Build and Push Backend Ventas
-        continue-on-error: true
-        run: |
-          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
-          docker build -t $ECR_REGISTRY/backend-ventas:${{ env.IMAGE_TAG }} \
-            -t $ECR_REGISTRY/backend-ventas:latest \
-            -f back-Ventas_SpringBoot/Springboot-API-REST/Dockerfile \
-            back-Ventas_SpringBoot/Springboot-API-REST
-          docker push $ECR_REGISTRY/backend-ventas:${{ env.IMAGE_TAG }}
-          docker push $ECR_REGISTRY/backend-ventas:latest
-
-      - name: Build and Push Frontend
-        continue-on-error: true
-        run: |
-          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
-          docker build -t $ECR_REGISTRY/frontend-despacho:${{ env.IMAGE_TAG }} \
-            -t $ECR_REGISTRY/frontend-despacho:latest \
-            -f front_despacho/Dockerfile \
-            front_despacho
-          docker push $ECR_REGISTRY/frontend-despacho:${{ env.IMAGE_TAG }}
-          docker push $ECR_REGISTRY/frontend-despacho:latest
-
-      - name: Save AWS Account ID
-        continue-on-error: true
-        run: |
-          account_id=$(aws sts get-caller-identity --query Account --output text)
-          echo "$account_id" > account_id.txt
-
-      - name: Upload Account ID
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
+          # Compilar backend de Despachos
+          cd back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
+          chmod +x mvnw
+          ./mvnw clean package -DskipTests
+          
+          # Compilar backend de Ventas
+          cd ../../back-Ventas_SpringBoot/Springboot-API-REST
+          chmod +x mvnw
+          ./mvnw clean package -DskipTests
+      
+      # --- 4. COMPILACIÓN DEL FRONTEND (NODE/VITE) ---
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
         with:
-          name: account-id
-          path: account_id.txt
+          node-version: '20'
 
-  deploy-to-eks:
-    needs: build-and-push
-    # Despliega las aplicaciones en el clúster de EKS.
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Clear AWS session token
+      - name: Build Frontend Production
         run: |
-          unset AWS_SESSION_TOKEN || true
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v5
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Validate AWS credentials
-        run: aws sts get-caller-identity --query Arn --output text
+          cd front_despacho
+          npm install
+          npm run build
 
       - name: Install kubectl
-        run: |
-          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-          chmod +x kubectl
-          sudo mv kubectl /usr/local/bin/
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
 
-      - name: Install Helm
-        run: |
-          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
 
       - name: Update kubeconfig
-        id: kubeconfig
-        continue-on-error: true
         run: |
-          if aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}; then
-            echo "status=success" >> $GITHUB_OUTPUT
-          else
-            echo "status=failure" >> $GITHUB_OUTPUT
-            exit 1
-          fi
+          aws eks update-kubeconfig --region us-east-1 --name despachos-cluster
 
-      - name: Download Account ID
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: account-id
-
-      - name: Get Account ID
-        id: account
+      - name: Obtener URL del Frontend (LoadBalancer)
         run: |
-          if [ -f account_id.txt ]; then
-            account_id=$(cat account_id.txt)
-          else
-            account_id=$(aws sts get-caller-identity --query Account --output text)
-          fi
-          echo "account_id=$account_id" >> $GITHUB_OUTPUT
-
-      - name: Create Namespace and ConfigMap/Secrets
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
-        run: |
-          kubectl create namespace despacho-app --dry-run=client -o yaml | kubectl apply -f -
-          kubectl apply -f infra/k8s/configmap-secrets.yml || echo "ConfigMap/Secrets actualizado"
-
-      - name: Deploy MySQL
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
-        run: |
-          kubectl apply -f infra/k8s/mysql.yml
-
-      - name: Deploy Backend Despacho
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
-        run: |
-          sed -e "s|\${ACCOUNT_ID}|${{ steps.account.outputs.account_id }}|g" \
-              -e "s|\${AWS_REGION}|${{ env.AWS_REGION }}|g" \
-              -e "s|\${IMAGE_TAG}|${{ env.IMAGE_TAG }}|g" \
-              infra/k8s/backend.yml | kubectl apply -f -
-
-      - name: Deploy Backend Ventas
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
-        run: |
-          sed -e "s|\${ACCOUNT_ID}|${{ steps.account.outputs.account_id }}|g" \
-              -e "s|\${AWS_REGION}|${{ env.AWS_REGION }}|g" \
-              -e "s|\${IMAGE_TAG}|${{ env.IMAGE_TAG }}|g" \
-              infra/k8s/backend-ventas.yml | kubectl apply -f -
-
-      - name: Deploy Frontend Deployment
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
-        run: |
-          sed -e "s|\${ACCOUNT_ID}|${{ steps.account.outputs.account_id }}|g" \
-              -e "s|\${AWS_REGION}|${{ env.AWS_REGION }}|g" \
-              -e "s|\${IMAGE_TAG}|${{ env.IMAGE_TAG }}|g" \
-              infra/k8s/frontend.yml | kubectl apply -f -
-
-      - name: Deploy Frontend Service
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
-        run: |
-          kubectl apply -f infra/k8s/frontend-service.yml
-
-      - name: Deploy Ingress
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
-        run: |
-          kubectl apply -f infra/k8s/ingress.yml
-
-      - name: Show Cluster Status
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
-        run: |
-          kubectl get pods -n despacho-app
-          kubectl get svc -n despacho-app
-          kubectl get ingress -A
-
-      - name: Obtener URL del Frontend (Ingress)
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
-        run: |
-          echo "Buscando URL pública del Ingress..."
-          for i in {1..30}; do
-            HOSTNAME=$(kubectl -n despacho-app get ingress despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
-            IP=$(kubectl -n despacho-app get ingress despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
-            if [ -n "$HOSTNAME" ]; then
-              echo "Frontend disponible: http://$HOSTNAME"
-              exit 0
-            elif [ -n "$IP" ]; then
-              echo "Frontend disponible: http://$IP"
-              exit 0
-            fi
-            echo "Intento $i/30 - esperando dirección pública del Ingress..."
-            sleep 10
-          done
-          echo "No se pudo obtener la URL pública del Ingress."
-          kubectl -n despacho-app get ingress despacho-ingress -o yaml || true
+          kubectl get svc frontend
+          kubectl get service frontend -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "Buscando dirección..."

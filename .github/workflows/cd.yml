@@ -1,303 +1,85 @@
-name: Despliegue continuo
+name: Despliegue Continuo
 
 on:
   push:
     branches:
       - devops
-
 env:
   AWS_REGION: us-east-1
-  CLUSTER_NAME: despachos-cluster   # Nombre del clúster EKS (definido en Terraform)
-  NAMESPACE: despacho-app
+  CLUSTER: innovatech-cluster
 
 jobs:
   deploy:
+    name: Despliegue a AWS EKS
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout del código
-        uses: actions/checkout@v5
+      # --- 1. DESCARGAR EL CÓDIGO ---
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      # --- 1. COMPILACIÓN DE AMBOS BACKENDS (JAVA/MAVEN) ---
-      - name: Set up JDK 17
-        uses: actions/setup-java@v5
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: 'maven'
-
-      - name: Build Backends JARs
-        run: |
-          cd back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
-          chmod +x mvnw
-          ./mvnw clean package -DskipTests
-          cd ../../back-Ventas_SpringBoot/Springboot-API-REST
-          chmod +x mvnw
-          ./mvnw clean package -DskipTests
-
-      # --- 2. COMPILACIÓN DEL FRONTEND (NODE/VITE) ---
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: './front_despacho/package-lock.json'
-
-      - name: Build Frontend Production
-        run: |
-          cd front_despacho
-          npm install
-          npm run build
-
-      # --- 3. CONFIGURACIÓN DE CREDENCIALES DE AWS (usando access keys) ---
-      - name: Clear AWS session token
-        run: |
-          unset AWS_SESSION_TOKEN || true
-
-      - name: Configurar credenciales de AWS
-        uses: aws-actions/configure-aws-credentials@v5
+      # --- 2. CONFIGURAR CREDENCIALES AWS ACADEMY ---
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
-
-      - name: Validate AWS credentials
-        run: aws sts get-caller-identity --query Arn --output text
-
+      
       - name: Login en ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Obtener AWS Account ID
-        id: get-account-id
+      - name: Obtener AWS Account ID y definir variables
         run: |
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
-          echo "AWS_ACCOUNT_ID=$ACCOUNT_ID" >> $GITHUB_ENV
+          echo "ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_ENV
+          echo "ECR_REGISTRY=$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com" >> $GITHUB_ENV
 
-      # --- 4. BUILD, TAG Y PUSH DE IMÁGENES (con versión = SHA del commit) ---
-      - name: Build y Push Ventas Backend
-        id: build-ventas
+      # --- 3. BUILD Y PUSH DOCKER ---
+      - name: Build y Push Imágenes
         run: |
-          IMAGE_TAG=${{ github.sha }}
-          REPO=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/backend-ventas
-          docker build --platform linux/amd64 -t $REPO:$IMAGE_TAG -t $REPO:latest ./back-Ventas_SpringBoot/Springboot-API-REST
-          docker push --all-tags $REPO
-          echo "image=$REPO:$IMAGE_TAG" >> $GITHUB_OUTPUT
+          # Ventas
+          docker build --platform linux/amd64 -t $ECR_REGISTRY/innovatech-ventas-backend:${{ github.sha }} ./back-Ventas_SpringBoot/Springboot-API-REST
+          docker push $ECR_REGISTRY/innovatech-ventas-backend:${{ github.sha }}
+          
+          # Despachos
+          docker build --platform linux/amd64 -t $ECR_REGISTRY/innovatech-despacho-backend:${{ github.sha }} ./back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
+          docker push $ECR_REGISTRY/innovatech-despacho-backend:${{ github.sha }}
+          
+          # Frontend
+          docker build --platform linux/amd64 -t $ECR_REGISTRY/innovatech-frontend:${{ github.sha }} ./front_despacho
+          docker push $ECR_REGISTRY/innovatech-frontend:${{ github.sha }}
 
-      - name: Build y Push Despacho Backend
-        id: build-despacho
+      # --- 4. CONECTAR CON EKS ---
+      - name: Update Kubeconfig for EKS
         run: |
-          IMAGE_TAG=${{ github.sha }}
-          REPO=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/backend-despacho
-          docker build --platform linux/amd64 -t $REPO:$IMAGE_TAG -t $REPO:latest ./back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
-          docker push --all-tags $REPO
-          echo "image=$REPO:$IMAGE_TAG" >> $GITHUB_OUTPUT
+          aws eks update-kubeconfig --name ${{ env.CLUSTER }} --region ${{ env.AWS_REGION }}
 
-      - name: Build y Push Frontend
-        id: build-frontend
+      # --- 5. DESPLIEGUE EN KUBERNETES ---
+      - name: Deploy Secrets and Config
         run: |
-          IMAGE_TAG=${{ github.sha }}
-          REPO=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/frontend-despacho
-          docker build --platform linux/amd64 -t $REPO:$IMAGE_TAG -t $REPO:latest ./front_despacho
-          docker push --all-tags $REPO
-          echo "image=$REPO:$IMAGE_TAG" >> $GITHUB_OUTPUT
+          kubectl apply -f Infrastructure/k8s/secret.yml
 
-      # --- 5. CONFIGURAR KUBECTL Y DESPLEGAR INGRESS PÚBLICO ---
-      - name: Instalar kubectl
-        uses: azure/setup-kubectl@v3
-        with:
-          version: 'latest'
-
-      - name: Verificar disponibilidad del Cluster EKS
-        continue-on-error: true
-        id: check-cluster
+      - name: Deploy Infrastructure and Database
         run: |
-          echo "Verificando disponibilidad del cluster EKS..."
-          if aws eks describe-cluster --name despachos-cluster --region ${{ env.AWS_REGION }} 2>&1 | grep -q "ACTIVE\|CREATING"; then
-            echo "status=available" >> $GITHUB_OUTPUT
-            echo "Cluster EKS disponible"
-          else
-            echo "status=not-available" >> $GITHUB_OUTPUT
-            echo "Cluster EKS no disponible (aún no creado)"
-          fi
+          kubectl apply -f Infrastructure/k8s/infra-db.yml
 
-      - name: Configurar kubeconfig para EKS
-        if: steps.check-cluster.outputs.status == 'available'
-        continue-on-error: true
-        id: kubeconfig
+      - name: Deploy Microservices
         run: |
-          echo "Configurando acceso al cluster EKS..."
-          if aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}; then
-            echo "status=success" >> $GITHUB_OUTPUT
-          else
-            echo "status=failure" >> $GITHUB_OUTPUT
-            exit 1
-          fi
+          kubectl apply -f Infrastructure/k8s/deployments.yml
+          kubectl apply -f Infrastructure/k8s/services.yml
+          kubectl apply -f Infrastructure/k8s/autoscaling.yml
 
-      - name: Verificar conexión al cluster
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
+      # --- 6. ACTUALIZACIÓN DE IMÁGENES ---
+      - name: Actualizar imágenes en el clúster
         run: |
-          echo "Verificando conexión al cluster..."
-          kubectl cluster-info
-          echo "Conexión OK"
+          kubectl set image deployment/ventas-backend ventas-container=$ECR_REGISTRY/innovatech-ventas-backend:${{ github.sha }}
+          kubectl set image deployment/despacho-backend despacho-container=$ECR_REGISTRY/innovatech-despacho-backend:${{ github.sha }}
+          kubectl set image deployment/frontend frontend-container=$ECR_REGISTRY/innovatech-frontend:${{ github.sha }}
 
-      - name: Crear namespace y desplegar ConfigMap y Secrets
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
+      - name: Verificar despliegue (Rollout Status)
         run: |
-          echo "Creando namespace despacho-app..."
-          kubectl create namespace despacho-app --dry-run=client -o yaml | kubectl apply -f -
-          echo "Desplegando ConfigMap y Secrets..."
-          kubectl apply -f infra/k8s/configmap-secrets.yml --validate=false
-          echo "ConfigMap y Secrets aplicados"
-
-      - name: Deploy MySQL
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
-        run: |
-          echo "Desplegando MySQL..."
-          kubectl apply -f infra/k8s/mysql.yml --validate=false
-          echo "MySQL desplegado"
-          echo "Esperando a que MySQL esté listo..."
-          kubectl wait --for=condition=ready pod -l app=mysql --timeout=300s --ignore-not-found=true
-          echo "MySQL está listo"
-
-      - name: Deploy Backend Despacho
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
-        run: |
-          echo "Desplegando Backend Despacho..."
-          kubectl apply -f infra/k8s/backend.yml --validate=false
-          echo "Backend Despacho desplegado"
-          echo "Esperando a que Backend Despacho esté listo..."
-          kubectl wait --for=condition=ready pod -l app=backend-despacho --timeout=300s --ignore-not-found=true
-          echo "Backend Despacho está listo"
-
-      - name: Deploy Backend Ventas
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
-        run: |
-          echo "Desplegando Backend Ventas..."
-          kubectl apply -f infra/k8s/backend-ventas.yml --validate=false
-          echo "Backend Ventas desplegado"
-          echo "Esperando a que Backend Ventas esté listo..."
-          kubectl wait --for=condition=ready pod -l app=backend-ventas --timeout=300s --ignore-not-found=true
-          echo "Backend Ventas está listo"
-
-      - name: Deploy Frontend
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
-        run: |
-          echo "Desplegando Frontend..."
-          kubectl apply -f infra/k8s/frontend-service.yml --validate=false
-          kubectl apply -f infra/k8s/frontend.yml --validate=false
-          echo "Frontend desplegado"
-          echo "Esperando a que Frontend esté listo..."
-          kubectl wait --for=condition=ready pod -l app=frontend-despacho --timeout=300s --ignore-not-found=true
-          echo "Frontend está listo"
-
-      - name: Desplegar Ingress PÚBLICO (sin autenticación)
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
-        run: |
-          echo "Desplegando Ingress público sin autenticación..."
-          kubectl apply -f infra/k8s/ingress.yml --validate=false
-          echo "Ingress aplicado"
-
-      - name: Desplegar HPA (Horizontal Pod Autoscaler)
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
-        run: |
-          echo "Desplegando Horizontal Pod Autoscalers..."
-          kubectl apply -f infra/k8s/hpa.yml --validate=false
-          echo "HPA aplicados"
-          echo ""
-          echo "HPA Configurados:"
-          kubectl get hpa -o wide
-
-      - name: Obtener URL pública del Frontend
-        if: steps.kubeconfig.outputs.status == 'success'
-        continue-on-error: true
-        id: get-url
-        run: |
-          echo "Esperando a que AWS ALB asigne la URL pública..."
-          echo ""
-          FRONTEND_URL=""
-          for i in {1..30}; do
-            FRONTEND_HOSTNAME=$(kubectl get ingress despacho-ingress -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
-            FRONTEND_IP=$(kubectl get ingress despacho-ingress -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
-            if [ -n "$FRONTEND_HOSTNAME" ]; then
-              FRONTEND_URL="http://$FRONTEND_HOSTNAME"
-            elif [ -n "$FRONTEND_IP" ]; then
-              FRONTEND_URL="http://$FRONTEND_IP"
-            fi
-            if [ -n "$FRONTEND_URL" ]; then
-              echo "URL PÚBLICA DISPONIBLE (SIN CONTRASEÑA):"
-              echo ""
-              echo "   Frontend:        $FRONTEND_URL"
-              echo "   API Ventas:      $FRONTEND_URL/api/ventas/"
-              echo "   API Despachos:   $FRONTEND_URL/api/despachos/"
-              echo ""
-              echo "La aplicación está lista para usar"
-              echo "   ✓ Frontend accesible públicamente"
-              echo "   ✓ Sin autenticación requerida"
-              echo "   ✓ Backends respondiendo"
-              echo ""
-              echo "frontend_url=$FRONTEND_URL" >> $GITHUB_OUTPUT
-              exit 0
-            fi
-            if [ $((i % 5)) -eq 0 ]; then
-              echo "   Intento $i/30 - Esperando ALB..."
-            fi
-            sleep 5
-          done
-          echo ""
-          echo "Timeout esperando URL del ALB"
-          echo "   AWS puede tardar hasta 5 minutos en asignar el DNS"
-          echo ""
-          echo "Para verificar manualmente, ejecuta:"
-          echo "   kubectl -n despacho-app get ingress despacho-ingress"
-          echo ""
-          echo "   O para obtener solo la URL:"
-          echo "   kubectl -n despacho-app get ingress despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'"
-          exit 0
-
-      - name: Cluster EKS no disponible - Instrucciones
-        if: steps.check-cluster.outputs.status == 'not-available'
-        run: |
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "CLUSTER EKS NO DISPONIBLE"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
-          echo "Las imágenes Docker se compilaron exitosamente ✓"
-          echo "Se subieron a ECR ✓"
-          echo ""
-          echo "Pero el Cluster EKS no existe todavía."
-          echo ""
-          echo "PRÓXIMOS PASOS:"
-          echo "──────────────────────────────────────────────────"
-          echo ""
-          echo "  Crear la infraestructura localmente:"
-          echo ""
-          echo "    cd infra/terraform"
-          echo "    terraform init"
-          echo "    terraform plan"
-          echo "    terraform apply"
-          echo ""
-          echo "  Espera ~20 minutos a que se cree:"
-          echo "    ✓ VPC + Subnets"
-          echo "    ✓ Internet Gateway + NAT Gateway"
-          echo "    ✓ ECR Repositories (ya están listos)"
-          echo ""
-          echo "  Luego haz push para desplegar:"
-          echo ""
-          echo "    git push origin devops"
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
-          echo "📌 Nota: Si necesitas EKS en lugar de solo VPC/ECR,"
-          echo "         el admin debe crear 2 roles IAM primero."
-          echo ""
+          kubectl rollout status deployment/ventas-backend
+          kubectl rollout status deployment/despacho-backend
+          kubectl rollout status deployment/frontend

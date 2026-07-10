@@ -206,7 +206,7 @@ jobs:
         working-directory: ./front_despacho
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: frontend-despacho
+          ECR_REPOSITORY: innovatech-frontend
           IMAGE_TAG: ${{ github.sha }}
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
@@ -271,19 +271,15 @@ jobs:
           sed -i "s|\${IMAGE_TAG}|$IMAGE_TAG|g" infra/k8s/*.yml
           
           # Desplegar
-          kubectl apply -f infra/k8s/namespace-configmap-secrets.yml
           kubectl apply -f infra/k8s/mysql.yml
-          kubectl apply -f infra/k8s/backend-ventas.yml
-          kubectl apply -f infra/k8s/backend.yml
-          kubectl apply -f infra/k8s/frontend-service.yml
-          kubectl apply -f infra/k8s/frontend.yml
-          kubectl apply -f infra/k8s/ingress.yml
-          kubectl apply -f infra/k8s/hpa.yml
+          kubectl apply -f infra/k8s/deployments.yml
+          kubectl apply -f infra/k8s/services.yml
+          kubectl apply -f infra/k8s/autoscaling.yml
           
           # Esperar a que pods estén listos
-          kubectl -n despacho-app rollout status deployment/backend-ventas --timeout=300s
-          kubectl -n despacho-app rollout status deployment/backend-despacho --timeout=300s
-          kubectl -n despacho-app rollout status deployment/frontend-despacho --timeout=300s
+          kubectl rollout status deployment/ventas-backend --timeout=300s
+          kubectl rollout status deployment/despacho-backend --timeout=300s
+          kubectl rollout status deployment/frontend --timeout=300s
 
       - name: Verificar deployments
         run: |
@@ -368,19 +364,15 @@ jobs:
           sed -i "s|\${IMAGE_TAG}|$IMAGE_TAG|g" infra/k8s/*.yml
           
           # Desplegar con blue-green (actualizar replicas)
-          kubectl apply -f infra/k8s/namespace-configmap-secrets.yml
           kubectl apply -f infra/k8s/mysql.yml
-          kubectl apply -f infra/k8s/backend-ventas.yml
-          kubectl apply -f infra/k8s/backend.yml
-          kubectl apply -f infra/k8s/frontend-service.yml
-          kubectl apply -f infra/k8s/frontend.yml
-          kubectl apply -f infra/k8s/ingress.yml
-          kubectl apply -f infra/k8s/hpa.yml
+          kubectl apply -f infra/k8s/deployments.yml
+          kubectl apply -f infra/k8s/services.yml
+          kubectl apply -f infra/k8s/autoscaling.yml
           
           # Esperar con timeout más largo
-          kubectl -n despacho-app rollout status deployment/backend-ventas --timeout=600s
-          kubectl -n despacho-app rollout status deployment/backend-despacho --timeout=600s
-          kubectl -n despacho-app rollout status deployment/frontend-despacho --timeout=600s
+          kubectl rollout status deployment/ventas-backend --timeout=600s
+          kubectl rollout status deployment/despacho-backend --timeout=600s
+          kubectl rollout status deployment/frontend --timeout=600s
 
       - name: Verificar deployments
         run: |
@@ -415,5 +407,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: 'Deployment a Producción exitoso!\n\nImages:\n- backend-ventas: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/backend-ventas:${{ github.sha }}\n- backend-despacho: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/backend-despacho:${{ github.sha }}\n- frontend: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/frontend-despacho:${{ github.sha }}'
+              body: 'Deployment a Producción exitoso!\n\nImages:\n- backend-ventas: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/backend-ventas:${{ github.sha }}\n- backend-despacho: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/backend-despacho:${{ github.sha }}\n- frontend: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/innovatech-frontend:${{ github.sha }}'
             })
