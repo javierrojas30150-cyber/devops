@@ -10,12 +10,12 @@ on:
       - devops
 env:
   AWS_REGION: us-east-1
-  CLUSTER: ${{ secrets.EKS_CLUSTER_NAME != '' && secrets.EKS_CLUSTER_NAME || 'innovatech-cluster' }}
+  CLUSTER: innovatech-cluster
+  EKS_CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
   AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
-  EKS_CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
 jobs:
   backend-tests:
     runs-on: ubuntu-latest
@@ -105,19 +105,19 @@ jobs:
           npm run build
 
       - name: Configure AWS credentials (OIDC if available)
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' }}
+        if: ${{ env.AWS_ROLE_TO_ASSUME != '' }}
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Configure AWS credentials (access keys fallback)
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME == '' && secrets.AWS_ACCESS_KEY_ID != '' }}
+        if: ${{ env.AWS_ROLE_TO_ASSUME == '' && env.AWS_ACCESS_KEY_ID != '' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Install kubectl
@@ -126,24 +126,25 @@ jobs:
           version: 'latest'
 
       - name: Update Kubeconfig for EKS
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' || secrets.AWS_ACCESS_KEY_ID != '' }}
+        if: ${{ env.AWS_ROLE_TO_ASSUME != '' || env.AWS_ACCESS_KEY_ID != '' }}
         run: |
           set -euo pipefail
-          echo "Updating kubeconfig for EKS cluster ${{ env.CLUSTER }} in ${{ env.AWS_REGION }}"
-          aws eks update-kubeconfig --name "${{ env.CLUSTER }}" --region "${{ env.AWS_REGION }}"
+          CLUSTER_NAME="${EKS_CLUSTER_NAME:-${CLUSTER}}"
+          echo "Updating kubeconfig for EKS cluster ${CLUSTER_NAME} in ${{ env.AWS_REGION }}"
+          aws eks update-kubeconfig --name "${CLUSTER_NAME}" --region "${{ env.AWS_REGION }}"
           kubectl config current-context
           kubectl config view --minify --output yaml
           kubectl cluster-info || true
           kubectl version --short
 
       - name: Obtener URL del Frontend (LoadBalancer)
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' || secrets.AWS_ACCESS_KEY_ID != '' }}
+        if: ${{ env.AWS_ROLE_TO_ASSUME != '' || env.AWS_ACCESS_KEY_ID != '' }}
         run: |
           kubectl get svc frontend || true
           kubectl get service frontend -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "Buscando dirección..."
 
       - name: AWS credentials not configured for LoadBalancer lookup
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME == '' && secrets.AWS_ACCESS_KEY_ID == '' }}
+        if: ${{ env.AWS_ROLE_TO_ASSUME == '' && env.AWS_ACCESS_KEY_ID == '' }}
         run: |
           echo "AWS credentials not configured; skipping LoadBalancer URL lookup."
           echo "Set AWS_ROLE_TO_ASSUME or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY in repository secrets to enable it."

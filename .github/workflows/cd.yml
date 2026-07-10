@@ -10,7 +10,8 @@ on:
       - devops
 env:
   AWS_REGION: us-east-1
-  CLUSTER: ${{ secrets.EKS_CLUSTER_NAME != '' && secrets.EKS_CLUSTER_NAME || 'innovatech-cluster' }}
+  CLUSTER: innovatech-cluster
+  EKS_CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
   AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -29,24 +30,24 @@ jobs:
       # --- 2. CONFIGURAR CREDENCIALES AWS ACADEMY ---
       - name: Configure AWS credentials (OIDC if available)
         id: aws-config-oidc
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' }}
+        if: ${{ env.AWS_ROLE_TO_ASSUME != '' }}
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Configure AWS credentials (access keys fallback)
         id: aws-config-keys
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME == '' && secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
+        if: ${{ env.AWS_ROLE_TO_ASSUME == '' && env.AWS_ACCESS_KEY_ID != '' && env.AWS_SECRET_ACCESS_KEY != '' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
       
       - name: Fail if AWS credentials are not configured
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME == '' && (secrets.AWS_ACCESS_KEY_ID == '' || secrets.AWS_SECRET_ACCESS_KEY == '') }}
+        if: ${{ env.AWS_ROLE_TO_ASSUME == '' && (env.AWS_ACCESS_KEY_ID == '' || env.AWS_SECRET_ACCESS_KEY == '') }}
         run: |
           echo "ERROR: AWS credentials are not configured. Set AWS_ROLE_TO_ASSUME or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY in repository secrets." >&2
           exit 1
@@ -61,7 +62,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Validate AWS credentials
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' || secrets.AWS_ACCESS_KEY_ID != '' }}
+        if: ${{ env.AWS_ROLE_TO_ASSUME != '' || env.AWS_ACCESS_KEY_ID != '' }}
         run: |
           echo "Validating AWS credentials..."
           if aws sts get-caller-identity >/dev/null 2>&1; then
@@ -72,7 +73,7 @@ jobs:
           fi
 
       - name: Obtener AWS Account ID y definir variables
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' || secrets.AWS_ACCESS_KEY_ID != '' }}
+        if: ${{ env.AWS_ROLE_TO_ASSUME != '' || env.AWS_ACCESS_KEY_ID != '' }}
         run: |
           echo "ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_ENV
           echo "ECR_REGISTRY=$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com" >> $GITHUB_ENV
@@ -96,12 +97,13 @@ jobs:
       - name: Update Kubeconfig for EKS (with retries & diagnostics)
         run: |
           set -euo pipefail
-          echo "Updating kubeconfig for EKS cluster ${{ env.CLUSTER }} in ${{ env.AWS_REGION }}"
+          CLUSTER_NAME="${EKS_CLUSTER_NAME:-${CLUSTER}}"
+          echo "Updating kubeconfig for EKS cluster ${CLUSTER_NAME} in ${{ env.AWS_REGION }}"
           ATTEMPTS=3
           i=0
           until [ $i -ge $ATTEMPTS ]
           do
-            if aws eks update-kubeconfig --name "${{ env.CLUSTER }}" --region "${{ env.AWS_REGION }}"; then
+            if aws eks update-kubeconfig --name "${CLUSTER_NAME}" --region "${{ env.AWS_REGION }}"; then
               echo "kubeconfig updated"
               break
             else
@@ -113,7 +115,7 @@ jobs:
           if [ $i -ge $ATTEMPTS ]; then
             echo "ERROR: update-kubeconfig failed after $ATTEMPTS attempts" >&2
             echo "Describe cluster for diagnostics:"
-            aws eks describe-cluster --name "${{ env.CLUSTER }}" --region "${{ env.AWS_REGION }}" || true
+            aws eks describe-cluster --name "${CLUSTER_NAME}" --region "${{ env.AWS_REGION }}" || true
             echo "Current KUBECONFIG content (if any):"
             if [ -f ~/.kube/config ]; then
               sed -n '1,120p' ~/.kube/config || true
