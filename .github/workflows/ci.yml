@@ -1,5 +1,9 @@
 name: Intregación Continua
 
+permissions:
+  id-token: write
+  contents: read
+
 on:
   push:
     branches:
@@ -23,14 +27,16 @@ jobs:
       - name: Run Backend Tests (Despacho)
         working-directory: back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
         run: |
+          sed -i 's/\r$//' mvnw
           chmod +x mvnw
-          ./mvnw test -DskipTests=false
+          ./mvnw -B test -DskipTests=false
 
       - name: Run Backend Tests (Venta)
         working-directory: back-Ventas_SpringBoot/Springboot-API-REST
         run: |
+          sed -i 's/\r$//' mvnw
           chmod +x mvnw
-          ./mvnw test -DskipTests=false
+          ./mvnw -B test -DskipTests=false
 
   # --- TRABAJO 2: TESTEAR EL FRONTEND (REACT) ---
   frontend-tests:
@@ -70,11 +76,13 @@ jobs:
         run: |
           set -e
           cd back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
+          sed -i 's/\r$//' mvnw
           chmod +x mvnw
-          ./mvnw clean package -DskipTests
+          ./mvnw -B clean package -DskipTests
           cd ../../back-Ventas_SpringBoot/Springboot-API-REST
+          sed -i 's/\r$//' mvnw
           chmod +x mvnw
-          ./mvnw clean package -DskipTests
+          ./mvnw -B clean package -DskipTests
       
       # --- 4. COMPILACIÓN DEL FRONTEND (NODE/VITE) ---
       - name: Set up Node.js
@@ -93,29 +101,56 @@ jobs:
         with:
           version: 'latest'
 
-      - name: Configure AWS CLI and kubeconfig
+      - name: Validate AWS credentials
+        id: aws-validate
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
           AWS_DEFAULT_REGION: us-east-1
         run: |
+          # Default to invalid
+          echo "valid=false" >> $GITHUB_OUTPUT
           if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
-            aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
-            aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
-            aws configure set region "$AWS_DEFAULT_REGION"
-            aws eks update-kubeconfig --region "$AWS_DEFAULT_REGION" --name despachos-cluster
+            export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_DEFAULT_REGION
+            if aws sts get-caller-identity >/dev/null 2>&1; then
+              echo "valid=true" >> $GITHUB_OUTPUT
+            else
+              echo "valid=false" >> $GITHUB_OUTPUT
+              echo "AWS credentials present but invalid or expired. Skipping AWS steps."
+            fi
           else
-            echo "AWS credentials not configured; skipping EKS update."
+            echo "AWS credentials not configured; skipping AWS steps."
           fi
 
-      - name: Obtener URL del Frontend (LoadBalancer)
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Configure AWS via OIDC (if role configured)
+        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' }}
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: us-east-1
+
+      - name: Debug AWS caller identity (OIDC)
+        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' }}
         run: |
-          if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
-            kubectl get svc frontend
-            kubectl get service frontend -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "Buscando dirección..."
-          else
-            echo "AWS credentials not configured; skipping frontend URL lookup."
-          fi
+          aws sts get-caller-identity || true
+
+      - name: Configure AWS credentials (action)
+        if: steps.aws-validate.outputs.valid == 'true'
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Update kubeconfig
+        if: steps.aws-validate.outputs.valid == 'true'
+        run: |
+          aws eks update-kubeconfig --region us-east-1 --name despachos-cluster
+
+      - name: Obtener URL del Frontend (LoadBalancer)
+        if: steps.aws-validate.outputs.valid == 'true'
+        run: |
+          kubectl get svc frontend || true
+          kubectl get service frontend -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "Buscando dirección..."
