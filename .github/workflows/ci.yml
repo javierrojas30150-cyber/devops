@@ -91,6 +91,7 @@ jobs:
           version: 'latest'
 
       - name: Configure AWS credentials
+        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -98,10 +99,12 @@ jobs:
           aws-region: us-east-1
 
       - name: Update kubeconfig
+        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         run: |
           aws eks update-kubeconfig --region us-east-1 --name despachos-cluster
 
       - name: Obtener URL del Frontend (LoadBalancer)
+        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         run: |
           kubectl get svc frontend
           kubectl get service frontend -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "Buscando dirección..."
