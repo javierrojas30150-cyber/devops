@@ -1,72 +1,27 @@
-name: Despliegue Continuo
-
-permissions:
-  id-token: write
-  contents: read
+name: CD - Deploy to EKS
 
 on:
-  push:
-    branches:
-      - devops
+  workflow_run:
+    workflows:
+      - CI - Build & Push Docker Images
+    types:
+      - completed
 
 env:
   AWS_REGION: us-east-1
-  CLUSTER: innovatech-cluster
-  # Repository secrets usados por este workflow:
-  # - AWS_ACCESS_KEY_ID
-  # - AWS_SECRET_ACCESS_KEY
-  # - AWS_SESSION_TOKEN
-  # - AWS_ROLE_TO_ASSUME (opcional para OIDC)
-  # - EKS_CLUSTER_NAME
-  EKS_CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
-  AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+  CLUSTER_NAME: innovatech-ep3-eks
+  PROJECT_NAME: innovatech-ep3
 
 jobs:
-  # Job principal para desplegar la aplicación en AWS EKS
   deploy:
-    name: Despliegue a AWS EKS
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    outputs:
-      frontend_url: ${{ steps.frontend-url.outputs.frontend_url }}
 
     steps:
-      # Descarga el código del repositorio para trabajar con él
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # Detecta si hay credenciales de AWS disponibles para EKS
-      - name: Detect AWS authentication mode
-        id: aws-auth
-        shell: bash
-        env:
-          AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: |
-          if [ -n "$AWS_ROLE_TO_ASSUME" ]; then
-            echo "mode=oidc" >> "$GITHUB_OUTPUT"
-          elif [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
-            echo "mode=keys" >> "$GITHUB_OUTPUT"
-          else
-            echo "mode=none" >> "$GITHUB_OUTPUT"
-          fi
-
-      # Configura credenciales AWS con OIDC si están definidas en GitHub Secrets
-      - name: Configure AWS credentials (OIDC if available)
-        id: aws-config-oidc
-        if: ${{ steps.aws-auth.outputs.mode == 'oidc' }}
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      # Usa credenciales de acceso como respaldo si OIDC no está disponible
-      - name: Configure AWS credentials (access keys fallback)
-        id: aws-config-keys
-        if: ${{ steps.aws-auth.outputs.mode == 'keys' }}
+      - name: Configurar credenciales AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -74,194 +29,93 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # Detiene el pipeline si no hay credenciales AWS válidas
-      - name: Fail if AWS credentials are not configured
-        if: ${{ steps.aws-auth.outputs.mode == 'none' }}
+      - name: Obtener URLs ECR
         run: |
-          echo "ERROR: AWS credentials are not configured. Set AWS_ROLE_TO_ASSUME or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY in repository secrets." >&2
-          exit 1
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
-      # Instala kubectl para interactuar con el cluster EKS
-      - name: Confirm repository secrets are available
+          echo "FRONTEND_ECR=$ACCOUNT_ID.dkr.ecr.${AWS_REGION}.amazonaws.com/${PROJECT_NAME}-frontend" >> $GITHUB_ENV
+          echo "VENTAS_ECR=$ACCOUNT_ID.dkr.ecr.${AWS_REGION}.amazonaws.com/${PROJECT_NAME}-ventas" >> $GITHUB_ENV
+          echo "DESPACHOS_ECR=$ACCOUNT_ID.dkr.ecr.${AWS_REGION}.amazonaws.com/${PROJECT_NAME}-despachos" >> $GITHUB_ENV
+
+      - name: Instalar kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configurar kubeconfig
         run: |
-          echo "AWS_ACCESS_KEY_ID configured: ${AWS_ACCESS_KEY_ID:+yes}"
-          echo "AWS_SECRET_ACCESS_KEY configured: ${AWS_SECRET_ACCESS_KEY:+yes}"
-          echo "AWS_SESSION_TOKEN configured: ${AWS_SESSION_TOKEN:+yes}"
-          echo "AWS_ROLE_TO_ASSUME configured: ${AWS_ROLE_TO_ASSUME:+yes}"
+          aws eks update-kubeconfig \
+            --region $AWS_REGION \
+            --name $CLUSTER_NAME
 
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v3
-        with:
-          version: 'latest'
-
-      # Comprueba que las credenciales AWS sean válidas antes de continuar
-      - name: Validate AWS credentials
-        if: ${{ env.AWS_ROLE_TO_ASSUME != '' || env.AWS_ACCESS_KEY_ID != '' }}
+      - name: Crear Secret
         run: |
-          echo "Validating AWS credentials..."
-          if aws sts get-caller-identity >/dev/null 2>&1; then
-            aws sts get-caller-identity
-          else
-            echo "ERROR: AWS credentials invalid or missing. Ensure AWS_ROLE_TO_ASSUME or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY are configured." >&2
-            exit 1
-          fi
+          cat > infra/k8s/secret.yml <<EOF
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: mysql-secret
+          type: Opaque
+          stringData:
+            MYSQL_ROOT_PASSWORD: "${{ secrets.MYSQL_ROOT_PASSWORD }}"
+            SPRING_DATASOURCE_USERNAME: "${{ secrets.MYSQL_USER }}"
+            SPRING_DATASOURCE_PASSWORD: "${{ secrets.MYSQL_PASSWORD }}"
+          EOF
 
-      # Obtiene el ID de la cuenta y construye la URL del registro ECR
-      - name: Obtener AWS Account ID y definir variables
-        if: ${{ env.AWS_ROLE_TO_ASSUME != '' || env.AWS_ACCESS_KEY_ID != '' }}
+          kubectl apply -f infra/k8s/secret.yml
+
+      - name: Aplicar manifiestos
         run: |
-          echo "ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_ENV
-          echo "ECR_REGISTRY=$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com" >> $GITHUB_ENV
+          kubectl apply -f infra/k8s/mysql.yml
+          kubectl apply -f infra/k8s/backend-ventas.yml
+          kubectl apply -f infra/k8s/backend-despachos.yml
+          kubectl apply -f infra/k8s/frontend.yml
+          kubectl apply -f infra/k8s/hpa.yml
 
-      # Inicia sesión en ECR para poder subir las imágenes Docker
-      - name: Login en ECR
-        id: login-ecr
+      - name: Actualizar imágenes
         run: |
-          set -euo pipefail
-          for attempt in 1 2 3; do
-            if aws ecr describe-registry >/dev/null 2>&1; then
-              echo "ECR registry reachable. Logging in..."
-              aws ecr get-login-password --region "${{ env.AWS_REGION }}" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
-              exit 0
-            fi
-            echo "Attempt $attempt/3: ECR login failed. Credentials may be expired or invalid."
-            sleep 5
-          done
-          echo "ERROR: ECR login failed. Check AWS credentials and ECR permissions." >&2
-          exit 1
+          kubectl set image deployment/backend-ventas \
+            back-ventas=$VENTAS_ECR:${{ github.event.workflow_run.head_sha }}
 
-      # Construye y publica las imágenes de los backends y el frontend en ECR
-      - name: Build y Push Imágenes
+          kubectl set image deployment/backend-despachos \
+            back-despachos=$DESPACHOS_ECR:${{ github.event.workflow_run.head_sha }}
+
+          kubectl set image deployment/frontend \
+            frontend=$FRONTEND_ECR:${{ github.event.workflow_run.head_sha }}
+
+      - name: Esperar rollout
         run: |
-          docker build --platform linux/amd64 -t $ECR_REGISTRY/innovatech-ventas-backend:${{ github.sha }} ./back-Ventas_SpringBoot/Springboot-API-REST
-          docker push $ECR_REGISTRY/innovatech-ventas-backend:${{ github.sha }}
-
-          docker build --platform linux/amd64 -t $ECR_REGISTRY/innovatech-despacho-backend:${{ github.sha }} ./back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
-          docker push $ECR_REGISTRY/innovatech-despacho-backend:${{ github.sha }}
-
-          docker build --platform linux/amd64 -t $ECR_REGISTRY/innovatech-frontend:${{ github.sha }} ./front_despacho
-          docker push $ECR_REGISTRY/innovatech-frontend:${{ github.sha }}
-
-      # Conecta el runner con el cluster EKS y muestra diagnóstico si falla
-      - name: Update Kubeconfig for EKS (with retries & diagnostics)
-        run: |
-          set -euo pipefail
-          CLUSTER_NAME="${EKS_CLUSTER_NAME:-${CLUSTER}}"
-          echo "Updating kubeconfig for EKS cluster ${CLUSTER_NAME} in ${{ env.AWS_REGION }}"
-          ATTEMPTS=3
-          i=0
-          until [ $i -ge $ATTEMPTS ]
-          do
-            if aws eks update-kubeconfig --name "${CLUSTER_NAME}" --region "${{ env.AWS_REGION }}"; then
-              echo "kubeconfig updated"
-              break
-            else
-              echo "Attempt $((i+1))/$ATTEMPTS: update-kubeconfig failed, retrying in 5s..."
-              sleep 5
-            fi
-            i=$((i+1))
-          done
-          if [ $i -ge $ATTEMPTS ]; then
-            echo "ERROR: update-kubeconfig failed after $ATTEMPTS attempts" >&2
-            echo "Describe cluster for diagnostics:"
-            aws eks describe-cluster --name "${CLUSTER_NAME}" --region "${{ env.AWS_REGION }}" || true
-            echo "Current KUBECONFIG content (if any):"
-            if [ -f ~/.kube/config ]; then
-              sed -n '1,120p' ~/.kube/config || true
-            else
-              echo "~/.kube/config not found"
-            fi
-            exit 1
-          fi
-          kubectl config current-context
-          kubectl config view --minify --output yaml
-          kubectl cluster-info || true
-          kubectl version || true
-
-      # Aplica secretos y configuraciones base al clúster
-      - name: Deploy Secrets and Config
-        run: |
-          if [ -f infra/k8s/secret.yml ]; then
-            kubectl apply -f infra/k8s/secret.yml
-          else
-            echo "infra/k8s/secret.yml not found, skipping"
-          fi
-
-      # Aplica la infraestructura y la base de datos necesaria
-      - name: Deploy Infrastructure and Database
-        run: |
-          if [ -f infra/k8s/mysql.yml ]; then
-            kubectl apply -f infra/k8s/mysql.yml
-          else
-            echo "infra/k8s/mysql.yml not found, skipping"
-          fi
-
-      # Aplica los manifiestos de despliegue de los microservicios
-      - name: Deploy Microservices
-        run: |
-          for f in infra/k8s/deployments.yml infra/k8s/services.yml infra/k8s/autoscaling.yml; do
-            if [ -f "$f" ]; then
-              kubectl apply -f "$f"
-            else
-              echo "$f not found, skipping"
-            fi
-          done
-
-      # Muestra nodos y pods para diagnosticar problemas del cluster
-      - name: Verificar nodos y pods del clúster
-        run: |
-          echo "Nodos disponibles:"
-          kubectl get nodes || true
-          echo "Pods del clúster:"
-          kubectl get pods -A || true
-
-      # Asegura que los deployments necesarios existan antes de actualizar imágenes
-      - name: Verificar que los Deployments existan
-        run: |
-          for deployment in frontend ventas-backend despacho-backend; do
-            kubectl get deployment "$deployment" >/dev/null 2>&1 || {
-              echo "ERROR: deployment/$deployment was not found in the cluster." >&2
-              exit 1
-            }
-          done
-
-      # Actualiza las imágenes de los deployments con la nueva versión del commit
-      - name: Actualizar imágenes en el clúster
-        run: |
-          kubectl set image deployment/ventas-backend ventas-container=$ECR_REGISTRY/innovatech-ventas-backend:${{ github.sha }}
-          kubectl set image deployment/despacho-backend despacho-container=$ECR_REGISTRY/innovatech-despacho-backend:${{ github.sha }}
-          kubectl set image deployment/frontend frontend-container=$ECR_REGISTRY/innovatech-frontend:${{ github.sha }}
-
-      # Espera a que los rollouts de los deployments finalicen correctamente
-      - name: Verificar despliegue (Rollout Status)
-        run: |
-          kubectl rollout status deployment/ventas-backend --timeout=300s
-          kubectl rollout status deployment/despacho-backend --timeout=300s
+          kubectl rollout status deployment/backend-ventas --timeout=300s
+          kubectl rollout status deployment/backend-despachos --timeout=300s
           kubectl rollout status deployment/frontend --timeout=300s
 
-      # Espera a que el LoadBalancer del frontend obtenga una URL pública
-      - name: Obtener URL pública del frontend
-        id: frontend-url
+      - name: Estado del clúster
         run: |
-          set -euo pipefail
-          echo "Esperando que el LoadBalancer del frontend obtenga una dirección externa..."
-          for attempt in $(seq 1 20); do
-            kubectl get svc frontend || true
-            URL=$(kubectl get svc frontend -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
-            if [ -z "$URL" ]; then
-              URL=$(kubectl get svc frontend -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
-            fi
-            if [ -n "$URL" ]; then
-              echo "frontend_url=$URL" >> "$GITHUB_OUTPUT"
-              echo "Frontend URL: http://$URL"
-              echo "## Frontend URL" >> "$GITHUB_STEP_SUMMARY"
-              echo "http://$URL" >> "$GITHUB_STEP_SUMMARY"
+          kubectl get pods -o wide
+          kubectl get svc -o wide
+          kubectl get hpa
+
+      - name: Obtener URL del Frontend (LoadBalancer)
+        run: |
+          echo "Esperando asignación de LoadBalancer al servicio frontend-despacho..."
+          
+          # Esperar a que el LoadBalancer tenga una dirección asignada
+          for i in {1..30}; do
+            URL=$(kubectl get svc frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+            IP=$(kubectl get svc frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+            
+            if [ -n "$URL" ] || [ -n "$IP" ]; then
+              ENDPOINT="${URL:-$IP}"
+              echo ""
+              echo "========================================="
+              echo "✓ Frontend Despacho disponible en:"
+              echo "http://$ENDPOINT"
+              echo "========================================="
               exit 0
             fi
-            echo "LoadBalancer still pending (attempt $attempt/20)."
-            kubectl get pods -A || true
-            sleep 30
+            
+            echo "Intento $i/30: Buscando dirección del LoadBalancer..."
+            sleep 10
           done
-          echo "Frontend LoadBalancer did not receive an address in time." >&2
-          kubectl get svc frontend || true
-          exit 1
+          
+          echo "⚠ LoadBalancer aún no tiene IP/hostname asignada. Verifica el estado:"
+          kubectl get svc frontend-despacho -o wide
+          

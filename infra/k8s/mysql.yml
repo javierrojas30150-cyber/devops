@@ -1,21 +1,15 @@
 apiVersion: v1
-kind: PersistentVolumeClaim
+kind: ConfigMap
 metadata:
-  name: pvc-base-datos-proyecto
-  namespace: default
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: ebs-gp3
-  resources:
-    requests:
-      storage: 10Gi
+  name: mysql-config
+data:
+  MYSQL_DATABASE: innovatech
+  SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/innovatech?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: deployment-mysql
-  namespace: default
+  name: mysql
 spec:
   replicas: 1
   selector:
@@ -27,39 +21,36 @@ spec:
         app: mysql
     spec:
       containers:
-      - name: mysql
-        image: mysql:8.0
-        env:
-        - name: MYSQL_ROOT_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: secretos
-              key: ROOT_PASSWORD
-        - name: MYSQL_DATABASE
-          valueFrom:
-            secretKeyRef:
-              name: secretos
-              key: DATABASE
-        ports:
-        - containerPort: 3306
-          name: mysql
-        volumeMounts:
-        - name: mysql-persistent-storage
-          mountPath: /var/lib/mysql
+        - name: mysql
+          image: mysql:8.0
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: mysql-config
+                  key: MYSQL_DATABASE
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
       volumes:
-      - name: mysql-persistent-storage
-        persistentVolumeClaim:
-          claimName: pvc-base-datos-proyecto
+        - name: mysql-data
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: mysql-service
-  namespace: default
+  name: mysql
 spec:
-  ports:
-  - port: 3306
-    targetPort: 3306
   selector:
     app: mysql
+  ports:
+    - port: 3306
+      targetPort: 3306
   type: ClusterIP
