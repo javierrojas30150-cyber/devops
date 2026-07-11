@@ -15,8 +15,17 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /build/target/*.jar app.jar
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh && chown -R appuser:appuser /app /entrypoint.sh
+
+# Crear entrypoint script inline
+RUN echo '#!/bin/bash' > /entrypoint.sh && \
+    echo 'echo "Esperando MySQL en $DB_ENDPOINT:$DB_PORT..."' >> /entrypoint.sh && \
+    echo 'until timeout 1 bash -c "echo > /dev/tcp/$DB_ENDPOINT/$DB_PORT" 2>/dev/null; do' >> /entrypoint.sh && \
+    echo '  echo "MySQL no disponible aún..."' >> /entrypoint.sh && \
+    echo '  sleep 3' >> /entrypoint.sh && \
+    echo 'done' >> /entrypoint.sh && \
+    echo 'echo "MySQL disponible, iniciando backend..."' >> /entrypoint.sh && \
+    echo 'java -jar app.jar' >> /entrypoint.sh && \
+    chmod +x /entrypoint.sh && chown appuser:appuser /entrypoint.sh
 
 USER appuser
 EXPOSE 8081

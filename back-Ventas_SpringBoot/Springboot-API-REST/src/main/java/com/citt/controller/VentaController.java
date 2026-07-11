@@ -52,14 +52,14 @@ public class VentaController {
     @Operation(summary = "Obtener una venta por ID", description = "Devuelve los detalles de una venta específica")
     public ResponseEntity<Venta> obtenerVenta(@PathVariable Long idVenta) throws VentaNotFoundException {
         Venta venta = ventaService.findById(idVenta);
-        return ResponseEntity.ok(venta); // Retornamos la venta encontrada con un estado 200 (OK)
+        return ResponseEntity.ok(venta);
     }
 
     @DeleteMapping("/{idVenta}")
     @Operation(summary = "Eliminar una venta", description = "Elimina una venta del sistema")
     public ResponseEntity<Void> eliminarVenta(@PathVariable Long idVenta) throws VentaNotFoundException {
         ventaService.deleteVenta(idVenta);
-        return ResponseEntity.noContent().build(); // Respuesta 204 No Content si se elimina correctamente
+        return ResponseEntity.noContent().build();
     }
 }
 

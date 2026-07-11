@@ -1,95 +1,171 @@
-﻿name: Despliegue continuo
+name: Despliegue Continuo
+
+permissions:
+  id-token: write
+  contents: read
 
 on:
   push:
     branches:
-      - deploy
-
+      - devops
 env:
   AWS_REGION: us-east-1
-  PROJECT_NAME: devops-u2
+  CLUSTER: innovatech-cluster
+  EKS_CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
+  AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
 
 jobs:
-  build-and-deploy:
+  deploy:
+    name: Despliegue a AWS EKS
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout del código
+      # --- 1. DESCARGAR EL CÓDIGO ---
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Configurar credenciales AWS
-        uses: aws-actions/configure-aws-credentials@v4
+      # --- 2. CONFIGURAR CREDENCIALES AWS ACADEMY ---
+      - name: Configure AWS credentials (OIDC if available)
+        id: aws-config-oidc
+        if: ${{ env.AWS_ROLE_TO_ASSUME != '' }}
+        uses: aws-actions/configure-aws-credentials@v2
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Configure AWS credentials (access keys fallback)
+        id: aws-config-keys
+        if: ${{ env.AWS_ROLE_TO_ASSUME == '' && env.AWS_ACCESS_KEY_ID != '' && env.AWS_SECRET_ACCESS_KEY != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Fail if AWS credentials are not configured
+        if: ${{ env.AWS_ROLE_TO_ASSUME == '' && (env.AWS_ACCESS_KEY_ID == '' || env.AWS_SECRET_ACCESS_KEY == '') }}
+        run: |
+          echo "ERROR: AWS credentials are not configured. Set AWS_ROLE_TO_ASSUME or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY in repository secrets." >&2
+          exit 1
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+      
       - name: Login en ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build y push backend ventas
+      - name: Validate AWS credentials
+        if: ${{ env.AWS_ROLE_TO_ASSUME != '' || env.AWS_ACCESS_KEY_ID != '' }}
         run: |
-          REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
-          IMAGE="${REGISTRY}/${{ env.PROJECT_NAME }}-backend-ventas:latest"
-          docker build --platform linux/amd64 \
-            -t "$IMAGE" \
-            ./back-Ventas_SpringBoot/Springboot-API-REST
-          docker push "$IMAGE"
+          echo "Validating AWS credentials..."
+          if aws sts get-caller-identity >/dev/null 2>&1; then
+            aws sts get-caller-identity
+          else
+            echo "ERROR: AWS credentials invalid or missing. Ensure AWS_ROLE_TO_ASSUME or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY are configured." >&2
+            exit 1
+          fi
 
-      - name: Build y push backend despachos
+      - name: Obtener AWS Account ID y definir variables
+        if: ${{ env.AWS_ROLE_TO_ASSUME != '' || env.AWS_ACCESS_KEY_ID != '' }}
         run: |
-          REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
-          IMAGE="${REGISTRY}/${{ env.PROJECT_NAME }}-backend-despachos:latest"
-          docker build --platform linux/amd64 \
-            -t "$IMAGE" \
-            ./back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
-          docker push "$IMAGE"
+          echo "ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_ENV
+          echo "ECR_REGISTRY=$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com" >> $GITHUB_ENV
 
-      - name: Build y push frontend
+      # --- 3. BUILD Y PUSH DOCKER ---
+      - name: Build y Push Imágenes
         run: |
-          REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
-          IMAGE="${REGISTRY}/${{ env.PROJECT_NAME }}-frontend:latest"
-          docker build --platform linux/amd64 \
-            -t "$IMAGE" \
-            ./front_despacho
-          docker push "$IMAGE"
+          # Ventas
+          docker build --platform linux/amd64 -t $ECR_REGISTRY/innovatech-ventas-backend:${{ github.sha }} ./back-Ventas_SpringBoot/Springboot-API-REST
+          docker push $ECR_REGISTRY/innovatech-ventas-backend:${{ github.sha }}
+          
+          # Despachos
+          docker build --platform linux/amd64 -t $ECR_REGISTRY/innovatech-despacho-backend:${{ github.sha }} ./back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
+          docker push $ECR_REGISTRY/innovatech-despacho-backend:${{ github.sha }}
+          
+          # Frontend
+          docker build --platform linux/amd64 -t $ECR_REGISTRY/innovatech-frontend:${{ github.sha }} ./front_despacho
+          docker push $ECR_REGISTRY/innovatech-frontend:${{ github.sha }}
 
-      - name: Configurar SSH
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-
-      - name: Desplegar backends en EC2 privada (vía bastión)
-        env:
-          FRONTEND_HOST: ${{ secrets.EC2_FRONTEND_HOST }}
-          BACKEND_HOST: ${{ secrets.EC2_BACKEND_PRIVATE_IP }}
+      # --- 4. CONECTAR CON EKS ---
+      - name: Update Kubeconfig for EKS (with retries & diagnostics)
         run: |
-          PROXY_CMD="ssh -o StrictHostKeyChecking=no -W %h:%p ec2-user@${FRONTEND_HOST}"
-          ssh -o StrictHostKeyChecking=no -o "ProxyCommand=${PROXY_CMD}" \
-            ec2-user@"${BACKEND_HOST}" 'sudo /opt/app/deploy.sh'
-
-      - name: Desplegar frontend en EC2 pública
-        env:
-          FRONTEND_HOST: ${{ secrets.EC2_FRONTEND_HOST }}
-          BACKEND_HOST: ${{ secrets.EC2_BACKEND_PRIVATE_IP }}
-        run: |
-          ssh -o StrictHostKeyChecking=no ec2-user@"${FRONTEND_HOST}" \
-            "sudo sed -i 's/^BACKEND_HOST=.*/BACKEND_HOST=${BACKEND_HOST}/' /opt/app/.env && \
-             sudo sed -i 's/^BACKEND_HOST_DESPACHOS=.*/BACKEND_HOST_DESPACHOS=${BACKEND_HOST}/' /opt/app/.env && \
-             sudo /opt/app/deploy.sh"
-
-      - name: Verificar frontend
-        env:
-          FRONTEND_HOST: ${{ secrets.EC2_FRONTEND_HOST }}
-        run: |
-          for i in $(seq 1 30); do
-            if curl -sf "http://${FRONTEND_HOST}/" >/dev/null; then
-              echo "Frontend OK en http://${FRONTEND_HOST}/"
-              exit 0
+          set -euo pipefail
+          CLUSTER_NAME="${EKS_CLUSTER_NAME:-${CLUSTER}}"
+          echo "Updating kubeconfig for EKS cluster ${CLUSTER_NAME} in ${{ env.AWS_REGION }}"
+          ATTEMPTS=3
+          i=0
+          until [ $i -ge $ATTEMPTS ]
+          do
+            if aws eks update-kubeconfig --name "${CLUSTER_NAME}" --region "${{ env.AWS_REGION }}"; then
+              echo "kubeconfig updated"
+              break
+            else
+              echo "Attempt $((i+1))/$ATTEMPTS: update-kubeconfig failed, retrying in 5s..."
+              sleep 5
             fi
-            sleep 10
+            i=$((i+1))
           done
-          echo "Frontend no respondió a tiempo"
-          exit 1
+          if [ $i -ge $ATTEMPTS ]; then
+            echo "ERROR: update-kubeconfig failed after $ATTEMPTS attempts" >&2
+            echo "Describe cluster for diagnostics:"
+            aws eks describe-cluster --name "${CLUSTER_NAME}" --region "${{ env.AWS_REGION }}" || true
+            echo "Current KUBECONFIG content (if any):"
+            if [ -f ~/.kube/config ]; then
+              sed -n '1,120p' ~/.kube/config || true
+            else
+              echo "~/.kube/config not found"
+            fi
+            exit 1
+          fi
+          # ensure kubectl can reach the cluster
+          kubectl config current-context
+          kubectl config view --minify --output yaml
+          kubectl cluster-info || true
+          kubectl version --short || true
+
+      # --- 5. DESPLIEGUE EN KUBERNETES ---
+      - name: Deploy Secrets and Config
+        run: |
+          if [ -f infra/k8s/secret.yml ]; then
+            kubectl apply -f infra/k8s/secret.yml
+          else
+            echo "infra/k8s/secret.yml not found, skipping"
+          fi
+
+      - name: Deploy Infrastructure and Database
+        run: |
+          if [ -f infra/k8s/mysql.yml ]; then
+            kubectl apply -f infra/k8s/mysql.yml
+          else
+            echo "infra/k8s/mysql.yml not found, skipping"
+          fi
+
+      - name: Deploy Microservices
+        run: |
+          for f in infra/k8s/deployments.yml infra/k8s/services.yml infra/k8s/autoscaling.yml; do
+            if [ -f "$f" ]; then
+              kubectl apply -f "$f"
+            else
+              echo "$f not found, skipping"
+            fi
+          done
+
+      # --- 6. ACTUALIZACIÓN DE IMÁGENES ---
+      - name: Actualizar imágenes en el clúster
+        run: |
+          kubectl set image deployment/ventas-backend ventas-container=$ECR_REGISTRY/innovatech-ventas-backend:${{ github.sha }}
+          kubectl set image deployment/despacho-backend despacho-container=$ECR_REGISTRY/innovatech-despacho-backend:${{ github.sha }}
+          kubectl set image deployment/frontend frontend-container=$ECR_REGISTRY/innovatech-frontend:${{ github.sha }}
+
+      - name: Verificar despliegue (Rollout Status)
+        run: |
+          kubectl rollout status deployment/ventas-backend
+          kubectl rollout status deployment/despacho-backend
+          kubectl rollout status deployment/frontend

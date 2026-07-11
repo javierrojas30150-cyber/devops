@@ -49,7 +49,6 @@ public class VentaServiceImpl implements VentaService{
                 ventaDB.setDespachoGenerado(venta.getDespachoGenerado());
             }
 
-            // Guardar la venta actualizada en la BD
             return ventaRepository.save(ventaDB);
         } else {
             throw new VentaNotFoundException("!No es posible actualizar! No existe venta con ID: " + idVenta);

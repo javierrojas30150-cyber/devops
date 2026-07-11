@@ -1,0 +1,7 @@
+# Archivo de Terraform con credenciales - NO SUBIR A GIT
+terraform.tfvars
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
