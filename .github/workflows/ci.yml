@@ -166,7 +166,7 @@ jobs:
           kubectl config current-context
           kubectl config view --minify --output yaml
           kubectl cluster-info || true
-          kubectl version --short
+          kubectl version
 
       # Indica que la URL del frontend se obtiene en el workflow de CD después del despliegue
       - name: Frontend URL note

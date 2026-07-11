@@ -160,7 +160,7 @@ jobs:
           kubectl config current-context
           kubectl config view --minify --output yaml
           kubectl cluster-info || true
-          kubectl version --short || true
+          kubectl version || true
 
       # Aplica secretos y configuraciones base al clúster
       - name: Deploy Secrets and Config
