@@ -37,30 +37,46 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # Detecta si hay credenciales de AWS disponibles para EKS
+      - name: Detect AWS authentication mode
+        id: aws-auth
+        shell: bash
+        env:
+          AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          if [ -n "$AWS_ROLE_TO_ASSUME" ]; then
+            echo "mode=oidc" >> "$GITHUB_OUTPUT"
+          elif [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "mode=keys" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=none" >> "$GITHUB_OUTPUT"
+          fi
+
       # Configura credenciales AWS con OIDC si están definidas en GitHub Secrets
       - name: Configure AWS credentials (OIDC if available)
         id: aws-config-oidc
-        if: ${{ env.AWS_ROLE_TO_ASSUME != '' }}
+        if: ${{ steps.aws-auth.outputs.mode == 'oidc' }}
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
       # Usa credenciales de acceso como respaldo si OIDC no está disponible
-      # Usa las variables de repository secrets AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY y AWS_SESSION_TOKEN como respaldo
       - name: Configure AWS credentials (access keys fallback)
         id: aws-config-keys
-        if: ${{ env.AWS_ROLE_TO_ASSUME == '' && env.AWS_ACCESS_KEY_ID != '' && env.AWS_SECRET_ACCESS_KEY != '' }}
+        if: ${{ steps.aws-auth.outputs.mode == 'keys' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
       # Detiene el pipeline si no hay credenciales AWS válidas
       - name: Fail if AWS credentials are not configured
-        if: ${{ env.AWS_ROLE_TO_ASSUME == '' && (env.AWS_ACCESS_KEY_ID == '' || env.AWS_SECRET_ACCESS_KEY == '') }}
+        if: ${{ steps.aws-auth.outputs.mode == 'none' }}
         run: |
           echo "ERROR: AWS credentials are not configured. Set AWS_ROLE_TO_ASSUME or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY in repository secrets." >&2
           exit 1

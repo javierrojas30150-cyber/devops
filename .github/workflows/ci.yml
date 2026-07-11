@@ -123,36 +123,47 @@ jobs:
           npm ci --no-audit --no-fund
           npm run build
 
+      # Detecta si hay credenciales de AWS disponibles para EKS
+      - name: Detect AWS authentication mode
+        id: aws-auth
+        shell: bash
+        env:
+          AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          if [ -n "$AWS_ROLE_TO_ASSUME" ]; then
+            echo "mode=oidc" >> "$GITHUB_OUTPUT"
+          elif [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "mode=keys" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=none" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "AWS_ROLE_TO_ASSUME configured: $([ -n "$AWS_ROLE_TO_ASSUME" ] && echo yes || echo no)"
+          echo "AWS_ACCESS_KEY_ID configured: $([ -n "$AWS_ACCESS_KEY_ID" ] && echo yes || echo no)"
+          echo "AWS_SECRET_ACCESS_KEY configured: $([ -n "$AWS_SECRET_ACCESS_KEY" ] && echo yes || echo no)"
+
       # Configura credenciales AWS para poder interactuar con EKS si están disponibles
       - name: Configure AWS credentials (OIDC if available)
-        if: ${{ env.AWS_ROLE_TO_ASSUME != '' }}
+        if: ${{ steps.aws-auth.outputs.mode == 'oidc' }}
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
       # Usa credenciales de acceso como respaldo si no existe OIDC
-      # Usa las variables de repository secrets AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY y AWS_SESSION_TOKEN como respaldo
       - name: Configure AWS credentials (access keys fallback)
-        if: ${{ env.AWS_ROLE_TO_ASSUME == '' && env.AWS_ACCESS_KEY_ID != '' && env.AWS_SECRET_ACCESS_KEY != '' }}
+        if: ${{ steps.aws-auth.outputs.mode == 'keys' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
       # Instala kubectl para revisar el cluster de Kubernetes
-      - name: Confirm repository secrets are available
-        run: |
-          echo "AWS_ACCESS_KEY_ID configured: ${AWS_ACCESS_KEY_ID:+yes}"
-          echo "AWS_SECRET_ACCESS_KEY configured: ${AWS_SECRET_ACCESS_KEY:+yes}"
-          echo "AWS_SESSION_TOKEN configured: ${AWS_SESSION_TOKEN:+yes}"
-          echo "AWS_ROLE_TO_ASSUME configured: ${AWS_ROLE_TO_ASSUME:+yes}"
-
-          if [ -z "${AWS_ROLE_TO_ASSUME}" ] && [ -z "${AWS_ACCESS_KEY_ID}" ]; then
-            echo "No AWS credentials were provided for EKS access."
-          fi
+      - name: Install kubectl
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v3
@@ -161,7 +172,7 @@ jobs:
 
       # Conecta el runner con el cluster EKS mediante kubeconfig
       - name: Update Kubeconfig for EKS
-        if: ${{ env.AWS_ROLE_TO_ASSUME != '' || (env.AWS_ACCESS_KEY_ID != '' && env.AWS_SECRET_ACCESS_KEY != '') }}
+        if: ${{ steps.aws-auth.outputs.mode != 'none' }}
         run: |
           set -euo pipefail
           CLUSTER_NAME="${EKS_CLUSTER_NAME:-${CLUSTER}}"
@@ -174,12 +185,12 @@ jobs:
 
       # Indica que la URL del frontend se obtiene en el workflow de CD después del despliegue
       - name: Frontend URL note
-        if: ${{ env.AWS_ROLE_TO_ASSUME != '' || (env.AWS_ACCESS_KEY_ID != '' && env.AWS_SECRET_ACCESS_KEY != '') }}
+        if: ${{ steps.aws-auth.outputs.mode != 'none' }}
         run: |
           echo "The frontend URL is created during the CD workflow after the Kubernetes service is deployed and the LoadBalancer becomes ready."
 
       - name: AWS credentials not configured for LoadBalancer lookup
-        if: ${{ env.AWS_ROLE_TO_ASSUME == '' && (env.AWS_ACCESS_KEY_ID == '' || env.AWS_SECRET_ACCESS_KEY == '') }}
+        if: ${{ steps.aws-auth.outputs.mode == 'none' }}
         run: |
           echo "AWS credentials not configured; skipping LoadBalancer URL lookup."
           echo "Set AWS_ROLE_TO_ASSUME or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY in repository secrets to enable it."
