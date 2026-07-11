@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - devops
+
 env:
   AWS_REGION: us-east-1
   CLUSTER: innovatech-cluster
@@ -21,13 +22,13 @@ jobs:
   deploy:
     name: Despliegue a AWS EKS
     runs-on: ubuntu-latest
+    outputs:
+      frontend_url: ${{ steps.frontend-url.outputs.frontend_url }}
 
     steps:
-      # --- 1. DESCARGAR EL CÓDIGO ---
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # --- 2. CONFIGURAR CREDENCIALES AWS ACADEMY ---
       - name: Configure AWS credentials (OIDC if available)
         id: aws-config-oidc
         if: ${{ env.AWS_ROLE_TO_ASSUME != '' }}
@@ -45,7 +46,7 @@ jobs:
           aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ env.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
-      
+
       - name: Fail if AWS credentials are not configured
         if: ${{ env.AWS_ROLE_TO_ASSUME == '' && (env.AWS_ACCESS_KEY_ID == '' || env.AWS_SECRET_ACCESS_KEY == '') }}
         run: |
@@ -56,10 +57,6 @@ jobs:
         uses: azure/setup-kubectl@v3
         with:
           version: 'latest'
-      
-      - name: Login en ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Validate AWS credentials
         if: ${{ env.AWS_ROLE_TO_ASSUME != '' || env.AWS_ACCESS_KEY_ID != '' }}
@@ -78,22 +75,33 @@ jobs:
           echo "ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_ENV
           echo "ECR_REGISTRY=$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com" >> $GITHUB_ENV
 
-      # --- 3. BUILD Y PUSH DOCKER ---
+      - name: Login en ECR
+        id: login-ecr
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if aws ecr describe-registry >/dev/null 2>&1; then
+              echo "ECR registry reachable. Logging in..."
+              aws ecr get-login-password --region "${{ env.AWS_REGION }}" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+              exit 0
+            fi
+            echo "Attempt $attempt/3: ECR login failed. Credentials may be expired or invalid."
+            sleep 5
+          done
+          echo "ERROR: ECR login failed. Check AWS credentials and ECR permissions." >&2
+          exit 1
+
       - name: Build y Push Imágenes
         run: |
-          # Ventas
           docker build --platform linux/amd64 -t $ECR_REGISTRY/innovatech-ventas-backend:${{ github.sha }} ./back-Ventas_SpringBoot/Springboot-API-REST
           docker push $ECR_REGISTRY/innovatech-ventas-backend:${{ github.sha }}
-          
-          # Despachos
+
           docker build --platform linux/amd64 -t $ECR_REGISTRY/innovatech-despacho-backend:${{ github.sha }} ./back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
           docker push $ECR_REGISTRY/innovatech-despacho-backend:${{ github.sha }}
-          
-          # Frontend
+
           docker build --platform linux/amd64 -t $ECR_REGISTRY/innovatech-frontend:${{ github.sha }} ./front_despacho
           docker push $ECR_REGISTRY/innovatech-frontend:${{ github.sha }}
 
-      # --- 4. CONECTAR CON EKS ---
       - name: Update Kubeconfig for EKS (with retries & diagnostics)
         run: |
           set -euo pipefail
@@ -124,13 +132,11 @@ jobs:
             fi
             exit 1
           fi
-          # ensure kubectl can reach the cluster
           kubectl config current-context
           kubectl config view --minify --output yaml
           kubectl cluster-info || true
           kubectl version --short || true
 
-      # --- 5. DESPLIEGUE EN KUBERNETES ---
       - name: Deploy Secrets and Config
         run: |
           if [ -f infra/k8s/secret.yml ]; then
@@ -157,7 +163,22 @@ jobs:
             fi
           done
 
-      # --- 6. ACTUALIZACIÓN DE IMÁGENES ---
+      - name: Verificar nodos y pods del clúster
+        run: |
+          echo "Nodos disponibles:"
+          kubectl get nodes || true
+          echo "Pods del clúster:"
+          kubectl get pods -A || true
+
+      - name: Verificar que los Deployments existan
+        run: |
+          for deployment in frontend ventas-backend despacho-backend; do
+            kubectl get deployment "$deployment" >/dev/null 2>&1 || {
+              echo "ERROR: deployment/$deployment was not found in the cluster." >&2
+              exit 1
+            }
+          done
+
       - name: Actualizar imágenes en el clúster
         run: |
           kubectl set image deployment/ventas-backend ventas-container=$ECR_REGISTRY/innovatech-ventas-backend:${{ github.sha }}
@@ -166,6 +187,32 @@ jobs:
 
       - name: Verificar despliegue (Rollout Status)
         run: |
-          kubectl rollout status deployment/ventas-backend
-          kubectl rollout status deployment/despacho-backend
-          kubectl rollout status deployment/frontend
+          kubectl rollout status deployment/ventas-backend --timeout=300s
+          kubectl rollout status deployment/despacho-backend --timeout=300s
+          kubectl rollout status deployment/frontend --timeout=300s
+
+      - name: Obtener URL pública del frontend
+        id: frontend-url
+        run: |
+          set -euo pipefail
+          echo "Esperando que el LoadBalancer del frontend obtenga una dirección externa..."
+          for attempt in $(seq 1 20); do
+            kubectl get svc frontend || true
+            URL=$(kubectl get svc frontend -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+            if [ -z "$URL" ]; then
+              URL=$(kubectl get svc frontend -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+            fi
+            if [ -n "$URL" ]; then
+              echo "frontend_url=$URL" >> "$GITHUB_OUTPUT"
+              echo "Frontend URL: http://$URL"
+              echo "## Frontend URL" >> "$GITHUB_STEP_SUMMARY"
+              echo "http://$URL" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "LoadBalancer still pending (attempt $attempt/20)."
+            kubectl get pods -A || true
+            sleep 30
+          done
+          echo "Frontend LoadBalancer did not receive an address in time." >&2
+          kubectl get svc frontend || true
+          exit 1
