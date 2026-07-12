@@ -95,14 +95,15 @@ jobs:
           kubectl get hpa
 
       - name: Obtener URL del Frontend
+        continue-on-error: true
         run: |
           echo "Esperando una URL pública para el frontend..."
 
-          for i in {1..30}; do
-            INGRESS_HOST=$(kubectl get ingress frontend-despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
-            INGRESS_IP=$(kubectl get ingress frontend-despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
-            SVC_HOST=$(kubectl get svc frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
-            SVC_IP=$(kubectl get svc frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+          for i in {1..40}; do
+            INGRESS_HOST=$(kubectl get ingress frontend-despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+            INGRESS_IP=$(kubectl get ingress frontend-despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+            SVC_HOST=$(kubectl get svc frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+            SVC_IP=$(kubectl get svc frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
 
             ENDPOINT="${INGRESS_HOST:-${INGRESS_IP:-${SVC_HOST:-$SVC_IP}}}"
 
@@ -115,11 +116,13 @@ jobs:
               exit 0
             fi
 
-            echo "Intento $i/30: buscando URL pública..."
-            sleep 10
+            echo "Intento $i/40: buscando URL pública..."
+            kubectl get svc frontend-despacho -o wide || true
+            sleep 15
           done
 
           echo "⚠ No se obtuvo una URL pública aún. Revisa el estado del Ingress/Service:"
           kubectl get ingress frontend-despacho-ingress -o wide || true
           kubectl get svc frontend-despacho -o wide || true
+          kubectl describe svc frontend-despacho || true
           
