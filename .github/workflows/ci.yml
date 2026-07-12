@@ -28,6 +28,21 @@ jobs:
       - name: Login Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Instalar kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Obtener URL del Frontend (LoadBalancer)
+        run: |
+          echo "Intentando obtener la URL del servicio frontend..."
+          kubectl get svc frontend-despacho || true
+          FRONTEND_URL=$(kubectl get service frontend-despacho -o jsonpath='{.status.loadbalancer.ingress[0].hostname}' 2>/dev/null || true)
+          if [ -n "$FRONTEND_URL" ]; then
+            echo "FRONTEND_URL=$FRONTEND_URL" >> "$GITHUB_ENV"
+            echo "URL del frontend: $FRONTEND_URL"
+          else
+            echo "Buscando dirección..."
+          fi
+
       - name: Obtener URLs ECR
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
