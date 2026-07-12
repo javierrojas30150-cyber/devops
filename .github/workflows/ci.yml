@@ -32,14 +32,14 @@ jobs:
       - name: Instalar kubectl
         uses: azure/setup-kubectl@v4
 
-      - name: Obtener URL del Frontend (LoadBalancer)
+      - name: Informar sobre la URL del Frontend
         continue-on-error: true
         run: |
-          echo "Intentando obtener la URL del servicio frontend..."
+          echo "La URL pública del frontend se obtendrá en el workflow de CD después de aplicar los manifiestos de Kubernetes."
 
           if ! aws eks update-kubeconfig --region "$AWS_REGION" --name "$CLUSTER_NAME" 2>/dev/null; then
             echo "No fue posible conectar con el clúster EKS desde este runner."
-            echo "Revisa que el rol de AWS tenga permisos para eks:DescribeCluster y que el clúster exista."
+            echo "Esto no afecta el build ni el push de imágenes; el despliegue se valida en el workflow CD."
             exit 0
           fi
 
@@ -48,39 +48,13 @@ jobs:
             exit 0
           fi
 
-          if ! kubectl get svc frontend-despacho >/dev/null 2>&1; then
-            echo "El servicio frontend-despacho aún no existe en el cluster."
-            echo "Esto suele pasar si el despliegue aún no se aplicó desde CD."
-            echo "La URL pública se obtendrá cuando el servicio esté creado y AWS le asigne una dirección."
-            exit 0
+          if kubectl get svc frontend-despacho >/dev/null 2>&1; then
+            echo "El servicio frontend-despacho ya existe en el cluster."
+            kubectl get svc frontend-despacho -o wide || true
+          else
+            echo "El servicio frontend-despacho aún no está disponible en esta ejecución de CI."
+            echo "Esto es normal si el despliegue todavía no se aplicó desde CD."
           fi
-
-          echo "Servicio frontend:"
-          kubectl get svc frontend-despacho -o wide
-
-          for i in {1..40}; do
-            FRONTEND_HOST=$(kubectl get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
-            FRONTEND_IP=$(kubectl get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
-
-            if [ -n "$FRONTEND_HOST" ]; then
-              echo "FRONTEND_URL=$FRONTEND_HOST" >> "$GITHUB_ENV"
-              echo "URL del frontend: http://$FRONTEND_HOST"
-              exit 0
-            fi
-
-            if [ -n "$FRONTEND_IP" ]; then
-              echo "FRONTEND_URL=$FRONTEND_IP" >> "$GITHUB_ENV"
-              echo "URL del frontend: http://$FRONTEND_IP"
-              exit 0
-            fi
-
-            echo "Intento $i/40: esperando dirección pública del LoadBalancer..."
-            sleep 15
-          done
-
-          echo "La URL pública aún no está disponible."
-          echo "Revisa el estado del servicio y del controlador de LoadBalancer en EKS."
-          kubectl describe svc frontend-despacho || true
 
       - name: Obtener URLs ECR
         run: |
