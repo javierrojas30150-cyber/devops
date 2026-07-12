@@ -1,20 +1,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: frontend
+  name: frontend-despacho
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: frontend
+      app: frontend-despacho
   template:
     metadata:
       labels:
-        app: frontend
+        app: frontend-despacho
     spec:
       containers:
         - name: frontend
-          image: frontend-placeholder:latest
+          image: frontend
           imagePullPolicy: Always
           ports:
             - containerPort: 80
@@ -41,10 +41,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: frontend
+  name: frontend-despacho
 spec:
   selector:
-    app: frontend
+    app: frontend-despacho
   ports:
     - port: 80
       targetPort: 80

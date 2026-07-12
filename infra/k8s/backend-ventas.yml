@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: back-ventas
-          image: ventas-placeholder:latest
+          image: back-ventas
           imagePullPolicy: Always
           ports:
             - containerPort: 8080

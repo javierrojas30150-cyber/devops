@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: back-despachos
-          image: despachos-placeholder:latest
+          image: back-despachos
           imagePullPolicy: Always
           ports:
             - containerPort: 8081

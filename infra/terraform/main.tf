@@ -45,9 +45,9 @@ resource "aws_subnet" "eks_subnet_1" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name                                       = "${local.project_name}-subnet-1"
+    Name                                          = "${local.project_name}-subnet-1"
     "kubernetes.io/cluster/${local.cluster_name}" = "shared"
-    "kubernetes.io/role/elb" = "1"
+    "kubernetes.io/role/elb"                      = "1"
   }
 }
 
@@ -58,9 +58,9 @@ resource "aws_subnet" "eks_subnet_2" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name                                       = "${local.project_name}-subnet-2"
+    Name                                          = "${local.project_name}-subnet-2"
     "kubernetes.io/cluster/${local.cluster_name}" = "shared"
-    "kubernetes.io/role/elb" = "1"
+    "kubernetes.io/role/elb"                      = "1"
   }
 }
 
@@ -160,7 +160,7 @@ resource "aws_eks_cluster" "eks" {
   role_arn = data.aws_iam_role.labrole.arn
 
   vpc_config {
-    subnet_ids              = [
+    subnet_ids = [
       aws_subnet.eks_subnet_1.id,
       aws_subnet.eks_subnet_2.id
     ]

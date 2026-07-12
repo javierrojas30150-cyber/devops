@@ -9,8 +9,8 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  CLUSTER_NAME: innovatech-ep3-eks
-  PROJECT_NAME: innovatech-ep3
+  CLUSTER_NAME: innovatech-eks
+  PROJECT_NAME: innovatech
 
 jobs:
   deploy:
@@ -78,14 +78,14 @@ jobs:
           kubectl set image deployment/backend-despachos \
             back-despachos=$DESPACHOS_ECR:${{ github.event.workflow_run.head_sha }}
 
-          kubectl set image deployment/frontend \
+          kubectl set image deployment/frontend-despacho \
             frontend=$FRONTEND_ECR:${{ github.event.workflow_run.head_sha }}
 
       - name: Esperar rollout
         run: |
           kubectl rollout status deployment/backend-ventas --timeout=300s
           kubectl rollout status deployment/backend-despachos --timeout=300s
-          kubectl rollout status deployment/frontend --timeout=300s
+          kubectl rollout status deployment/frontend-despacho --timeout=300s
 
       - name: Estado del clúster
         run: |

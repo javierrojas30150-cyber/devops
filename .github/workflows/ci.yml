@@ -7,7 +7,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  PROJECT_NAME: innovatech-ep3
+  PROJECT_NAME: innovatech
 
 jobs:
   build-and-push:
@@ -65,7 +65,7 @@ jobs:
           docker build \
             -t $FRONTEND_ECR:${GITHUB_SHA} \
             -t $FRONTEND_ECR:latest \
-            ./frontend/front_despacho
+            ./front_despacho
 
       - name: Push Frontend
         run: |
