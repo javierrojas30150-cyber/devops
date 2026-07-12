@@ -69,6 +69,7 @@ jobs:
           kubectl apply -f infra/k8s/backend-despachos.yml
           kubectl apply -f infra/k8s/frontend.yml
           kubectl apply -f infra/k8s/hpa.yml
+          kubectl apply -f infra/k8s/ingress.yml
 
       - name: Actualizar imágenes
         run: |
@@ -93,17 +94,19 @@ jobs:
           kubectl get svc -o wide
           kubectl get hpa
 
-      - name: Obtener URL del Frontend (LoadBalancer)
+      - name: Obtener URL del Frontend
         run: |
-          echo "Esperando asignación de LoadBalancer al servicio frontend-despacho..."
-          
-          # Esperar a que el LoadBalancer tenga una dirección asignada
+          echo "Esperando una URL pública para el frontend..."
+
           for i in {1..30}; do
-            URL=$(kubectl get svc frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
-            IP=$(kubectl get svc frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
-            
-            if [ -n "$URL" ] || [ -n "$IP" ]; then
-              ENDPOINT="${URL:-$IP}"
+            INGRESS_HOST=$(kubectl get ingress frontend-despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+            INGRESS_IP=$(kubectl get ingress frontend-despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+            SVC_HOST=$(kubectl get svc frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+            SVC_IP=$(kubectl get svc frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+
+            ENDPOINT="${INGRESS_HOST:-${INGRESS_IP:-${SVC_HOST:-$SVC_IP}}}"
+
+            if [ -n "$ENDPOINT" ]; then
               echo ""
               echo "========================================="
               echo "✓ Frontend Despacho disponible en:"
@@ -111,11 +114,12 @@ jobs:
               echo "========================================="
               exit 0
             fi
-            
-            echo "Intento $i/30: Buscando dirección del LoadBalancer..."
+
+            echo "Intento $i/30: buscando URL pública..."
             sleep 10
           done
-          
-          echo "⚠ LoadBalancer aún no tiene IP/hostname asignada. Verifica el estado:"
-          kubectl get svc frontend-despacho -o wide
+
+          echo "⚠ No se obtuvo una URL pública aún. Revisa el estado del Ingress/Service:"
+          kubectl get ingress frontend-despacho-ingress -o wide || true
+          kubectl get svc frontend-despacho -o wide || true
           
