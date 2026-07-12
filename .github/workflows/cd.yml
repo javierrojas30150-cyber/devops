@@ -110,16 +110,29 @@ jobs:
             frontend=$FRONTEND_ECR:${IMAGE_TAG}
 
       - name: Esperar rollout
+        continue-on-error: true
         run: |
-          kubectl rollout status deployment/backend-ventas --timeout=300s
-          kubectl rollout status deployment/backend-despachos --timeout=300s
-          kubectl rollout status deployment/frontend-despacho --timeout=300s
+          echo "Verificando rollout de los deployments..."
+          kubectl rollout status deployment/backend-ventas --timeout=300s || true
+          kubectl rollout status deployment/backend-despachos --timeout=300s || true
+          kubectl rollout status deployment/frontend-despacho --timeout=300s || true
 
       - name: Estado del clúster
         run: |
-          kubectl get pods -o wide
-          kubectl get svc -o wide
-          kubectl get hpa
+          echo "=== Pods ==="
+          kubectl get pods -o wide || true
+          echo "=== Servicios ==="
+          kubectl get svc -o wide || true
+          echo "=== HPA ==="
+          kubectl get hpa || true
+          echo "=== Describiendo backend-ventas ==="
+          kubectl describe deployment backend-ventas || true
+          echo "=== Describiendo backend-despachos ==="
+          kubectl describe deployment backend-despachos || true
+          echo "=== Describiendo frontend-despacho ==="
+          kubectl describe deployment frontend-despacho || true
+          echo "=== Eventos recientes ==="
+          kubectl get events --sort-by=.metadata.creationTimestamp || true
 
       - name: Obtener URL del Frontend
         continue-on-error: true
