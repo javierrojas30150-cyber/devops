@@ -6,6 +6,12 @@ on:
       - CI - Build & Push Docker Images
     types:
       - completed
+    branches:
+      - devops
+  push:
+    branches:
+      - devops
+  workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
@@ -14,7 +20,7 @@ env:
 
 jobs:
   deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -32,7 +38,12 @@ jobs:
       - name: Obtener URLs ECR
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          IMAGE_TAG="${{ github.event.workflow_run.head_sha }}"
+          if [ -z "$IMAGE_TAG" ]; then
+            IMAGE_TAG="${{ github.sha }}"
+          fi
 
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
           echo "FRONTEND_ECR=$ACCOUNT_ID.dkr.ecr.${AWS_REGION}.amazonaws.com/${PROJECT_NAME}-frontend" >> $GITHUB_ENV
           echo "VENTAS_ECR=$ACCOUNT_ID.dkr.ecr.${AWS_REGION}.amazonaws.com/${PROJECT_NAME}-ventas" >> $GITHUB_ENV
           echo "DESPACHOS_ECR=$ACCOUNT_ID.dkr.ecr.${AWS_REGION}.amazonaws.com/${PROJECT_NAME}-despachos" >> $GITHUB_ENV
@@ -62,6 +73,22 @@ jobs:
 
           kubectl apply -f infra/k8s/secret.yml
 
+      - name: Esperar imágenes en ECR
+        run: |
+          for i in {1..30}; do
+            if aws ecr describe-images --repository-name ${PROJECT_NAME}-frontend --image-ids imageTag=${IMAGE_TAG} >/dev/null 2>&1 && \
+               aws ecr describe-images --repository-name ${PROJECT_NAME}-ventas --image-ids imageTag=${IMAGE_TAG} >/dev/null 2>&1 && \
+               aws ecr describe-images --repository-name ${PROJECT_NAME}-despachos --image-ids imageTag=${IMAGE_TAG} >/dev/null 2>&1; then
+              echo "Las imágenes para ${IMAGE_TAG} ya están disponibles en ECR."
+              exit 0
+            fi
+            echo "Esperando que las imágenes ${IMAGE_TAG} aparezcan en ECR... intento $i/30"
+            sleep 15
+          done
+
+          echo "No se encontraron las imágenes en ECR a tiempo."
+          exit 1
+
       - name: Aplicar manifiestos
         run: |
           kubectl apply -f infra/k8s/mysql.yml
@@ -74,13 +101,13 @@ jobs:
       - name: Actualizar imágenes
         run: |
           kubectl set image deployment/backend-ventas \
-            back-ventas=$VENTAS_ECR:${{ github.event.workflow_run.head_sha }}
+            back-ventas=$VENTAS_ECR:${IMAGE_TAG}
 
           kubectl set image deployment/backend-despachos \
-            back-despachos=$DESPACHOS_ECR:${{ github.event.workflow_run.head_sha }}
+            back-despachos=$DESPACHOS_ECR:${IMAGE_TAG}
 
           kubectl set image deployment/frontend-despacho \
-            frontend=$FRONTEND_ECR:${{ github.event.workflow_run.head_sha }}
+            frontend=$FRONTEND_ECR:${IMAGE_TAG}
 
       - name: Esperar rollout
         run: |
