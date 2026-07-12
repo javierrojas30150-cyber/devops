@@ -66,9 +66,9 @@ jobs:
             name: mysql-secret
           type: Opaque
           stringData:
-            MYSQL_ROOT_PASSWORD: "${{ secrets.MYSQL_ROOT_PASSWORD }}"
-            SPRING_DATASOURCE_USERNAME: "${{ secrets.MYSQL_USER }}"
-            SPRING_DATASOURCE_PASSWORD: "${{ secrets.MYSQL_PASSWORD }}"
+            MYSQL_ROOT_PASSWORD: "${{ secrets.MYSQL_ROOT_PASSWORD || 'RootPassword123!' }}"
+            MYSQL_USER: "${{ secrets.MYSQL_USER || 'innovatech' }}"
+            MYSQL_PASSWORD: "${{ secrets.MYSQL_PASSWORD || 'Innovatech123!' }}"
           EOF
 
           kubectl apply -f infra/k8s/secret.yml
