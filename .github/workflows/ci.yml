@@ -65,7 +65,7 @@ jobs:
           docker build \
             -t $FRONTEND_ECR:${GITHUB_SHA} \
             -t $FRONTEND_ECR:latest \
-            ./front_despacho
+            ./fronted/front_despacho
 
       - name: Push Frontend
         run: |
