@@ -7,6 +7,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
+  CLUSTER_NAME: innovatech-eks
   PROJECT_NAME: innovatech
 
 jobs:
@@ -32,15 +33,35 @@ jobs:
         uses: azure/setup-kubectl@v4
 
       - name: Obtener URL del Frontend (LoadBalancer)
+        continue-on-error: true
         run: |
           echo "Intentando obtener la URL del servicio frontend..."
-          kubectl get svc frontend-despacho || true
-          FRONTEND_URL=$(kubectl get service frontend-despacho -o jsonpath='{.status.loadbalancer.ingress[0].hostname}' 2>/dev/null || true)
+
+          if ! aws eks update-kubeconfig --region "$AWS_REGION" --name "$CLUSTER_NAME" 2>/dev/null; then
+            echo "No fue posible conectar con el clúster EKS desde este runner."
+            echo "Revisa que el rol de AWS tenga permisos para eks:DescribeCluster y que el clúster exista."
+            exit 0
+          fi
+
+          if ! kubectl cluster-info >/dev/null 2>&1; then
+            echo "El contexto de Kubernetes no está disponible en este runner."
+            exit 0
+          fi
+
+          echo "Servicio frontend:"
+          kubectl get svc frontend-despacho -o wide 2>/dev/null || echo "El servicio aún no está disponible."
+
+          FRONTEND_URL=$(kubectl get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+          if [ -z "$FRONTEND_URL" ]; then
+            FRONTEND_URL=$(kubectl get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+          fi
+
           if [ -n "$FRONTEND_URL" ]; then
             echo "FRONTEND_URL=$FRONTEND_URL" >> "$GITHUB_ENV"
-            echo "URL del frontend: $FRONTEND_URL"
+            echo "URL del frontend: http://$FRONTEND_URL"
           else
             echo "Buscando dirección..."
+            echo "La URL pública aún no está disponible. Revisa el servicio o el Ingress en EKS."
           fi
 
       - name: Obtener URLs ECR
