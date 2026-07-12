@@ -12,6 +12,20 @@ spec:
   rules:
     - http:
         paths:
+          - path: /api/ventas
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-ventas
+                port:
+                  number: 8080
+          - path: /api/despachos
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-despachos
+                port:
+                  number: 8081
           - path: /
             pathType: Prefix
             backend:
