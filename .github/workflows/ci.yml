@@ -90,8 +90,3 @@ jobs:
       - name: Configurar kubeconfig
         run: |
           aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME
-
-      - name: Obtener URL del Frontend (LoadBalancer)
-        run: |
-          kubectl get svc frontend-despacho -n default
-          kubectl get service frontend-despacho -n default -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "Buscando dirección..."
