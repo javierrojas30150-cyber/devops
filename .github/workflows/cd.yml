@@ -202,6 +202,17 @@ jobs:
       - name: Obtener URL del Frontend (LoadBalancer)
         continue-on-error: true
         run: |
-          kubectl get svc frontend-despacho -n $NAMESPACE
-          kubectl get service frontend-despacho -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "Buscando dirección..."
+          echo "Buscando LoadBalancer para frontend-despacho..."
+          for i in $(seq 1 30); do
+            HOST=$(kubectl get service frontend-despacho -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+            if [ -n "$HOST" ]; then
+              echo "Frontend LoadBalancer: $HOST"
+              exit 0
+            fi
+            echo "Intento $i/30: LoadBalancer aún no disponible. Esperando 10s..."
+            sleep 10
+          done
+          echo "ERROR: No se obtuvo la URL del LoadBalancer para frontend-despacho después de 300s."
+          kubectl get svc frontend-despacho -n $NAMESPACE -o yaml || true
+          exit 1
           
