@@ -204,36 +204,9 @@ jobs:
           echo "=== Eventos recientes ==="
           kubectl get events -n $NAMESPACE --sort-by=.metadata.creationTimestamp || true
 
-      - name: Obtener URL del Frontend
+      - name: Obtener URL del Frontend (LoadBalancer)
         continue-on-error: true
         run: |
-          echo "Esperando una URL pública para el frontend..."
-
-          for i in {1..40}; do
-            SVC_HOST=$(kubectl get svc frontend-despacho -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
-            SVC_IP=$(kubectl get svc frontend-despacho -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
-            INGRESS_HOST=$(kubectl get ingress frontend-despacho-ingress -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
-            INGRESS_IP=$(kubectl get ingress frontend-despacho-ingress -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
-
-            ENDPOINT="${INGRESS_HOST:-${INGRESS_IP:-${SVC_HOST:-$SVC_IP}}}"
-
-            if [ -n "$ENDPOINT" ]; then
-              echo ""
-              echo "========================================="
-              echo "✓ Frontend Despacho disponible en:"
-              echo "http://$ENDPOINT"
-              echo "========================================="
-              exit 0
-            fi
-
-            echo "Intento $i/40: buscando URL pública..."
-            kubectl get svc frontend-despacho -o wide || true
-            sleep 15
-          done
-
-          echo "⚠ No se obtuvo una URL pública aún. Revisa el estado del Service/Ingress y el AWS Load Balancer Controller:"
-          kubectl get ingress frontend-despacho-ingress -o wide || true
-          kubectl get svc frontend-despacho -o wide || true
-          kubectl describe svc frontend-despacho || true
-          kubectl describe ingress frontend-despacho-ingress || true
+          kubectl get svc frontend-despacho -n $NAMESPACE
+          kubectl get service frontend-despacho -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "Buscando dirección..."
           
