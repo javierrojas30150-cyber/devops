@@ -32,55 +32,16 @@ jobs:
       - name: Instalar kubectl
         uses: azure/setup-kubectl@v4
 
-      - name: Obtener URL del Frontend (LoadBalancer)
-        continue-on-error: true
+      - name: Crear repositorios ECR si no existen
         run: |
-          echo "Intentando obtener la URL del servicio frontend..."
-
-          if ! aws eks update-kubeconfig --region "$AWS_REGION" --name "$CLUSTER_NAME" 2>/dev/null; then
-            echo "No fue posible conectar con el clúster EKS desde este runner."
-            echo "Revisa que el rol de AWS tenga permisos para eks:DescribeCluster y que el clúster exista."
-            exit 0
-          fi
-
-          if ! kubectl cluster-info >/dev/null 2>&1; then
-            echo "El contexto de Kubernetes no está disponible en este runner."
-            exit 0
-          fi
-
-          if ! kubectl get svc frontend-despacho >/dev/null 2>&1; then
-            echo "El servicio frontend-despacho aún no existe en el cluster."
-            echo "Esto suele pasar si el despliegue aún no se aplicó desde CD."
-            echo "La URL pública se obtendrá cuando el servicio esté creado y AWS le asigne una dirección."
-            exit 0
-          fi
-
-          echo "Servicio frontend:"
-          kubectl get svc frontend-despacho -o wide
-
-          for i in {1..40}; do
-            FRONTEND_HOST=$(kubectl get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
-            FRONTEND_IP=$(kubectl get service frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
-
-            if [ -n "$FRONTEND_HOST" ]; then
-              echo "FRONTEND_URL=$FRONTEND_HOST" >> "$GITHUB_ENV"
-              echo "URL del frontend: http://$FRONTEND_HOST"
-              exit 0
+          for REPO in ${PROJECT_NAME}-frontend ${PROJECT_NAME}-ventas ${PROJECT_NAME}-despachos; do
+            if ! aws ecr describe-repositories --repository-names "$REPO" >/dev/null 2>&1; then
+              echo "Creando repositorio ECR: $REPO"
+              aws ecr create-repository --repository-name "$REPO" >/dev/null
+            else
+              echo "Repositorio ECR ya existe: $REPO"
             fi
-
-            if [ -n "$FRONTEND_IP" ]; then
-              echo "FRONTEND_URL=$FRONTEND_IP" >> "$GITHUB_ENV"
-              echo "URL del frontend: http://$FRONTEND_IP"
-              exit 0
-            fi
-
-            echo "Intento $i/40: esperando dirección pública del LoadBalancer..."
-            sleep 15
           done
-
-          echo "La URL pública aún no está disponible."
-          echo "Revisa el estado del servicio y del controlador de LoadBalancer en EKS."
-          kubectl describe svc frontend-despacho || true
 
       - name: Obtener URLs ECR
         run: |

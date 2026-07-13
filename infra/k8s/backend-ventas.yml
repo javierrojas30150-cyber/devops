@@ -14,6 +14,7 @@ spec:
     spec:
       containers:
         - name: back-ventas
+          # Reemplazado en el workflow CD con la ruta completa de ECR y el tag de la imagen
           image: back-ventas
           imagePullPolicy: Always
           ports:

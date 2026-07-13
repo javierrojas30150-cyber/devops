@@ -17,6 +17,7 @@ env:
   AWS_REGION: us-east-1
   CLUSTER_NAME: innovatech-eks
   PROJECT_NAME: innovatech
+  NAMESPACE: default
 
 jobs:
   deploy:
@@ -51,11 +52,46 @@ jobs:
       - name: Instalar kubectl
         uses: azure/setup-kubectl@v4
 
+      - name: Validar secretos necesarios
+        run: |
+          if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ] || [ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then
+            echo "ERROR: AWS_ACCESS_KEY_ID y AWS_SECRET_ACCESS_KEY deben existir en GitHub Secrets."
+            exit 1
+          fi
+          if [ -z "${{ secrets.MYSQL_ROOT_PASSWORD }}" ] || [ -z "${{ secrets.MYSQL_USER }}" ] || [ -z "${{ secrets.MYSQL_PASSWORD }}" ]; then
+            echo "WARN: Secrets de MySQL incompletos. Se usarán valores por defecto para el Secret mysql-secret."
+          fi
+
+      - name: Verificar existencia del cluster EKS
+        run: |
+          echo "Clusters EKS disponibles en $AWS_REGION:"
+          aws eks list-clusters --region "$AWS_REGION" --output table || true
+
+          if ! aws eks list-clusters --region "$AWS_REGION" --query "clusters[]" --output text | grep -xq "$CLUSTER_NAME"; then
+            echo "No se encontró el cluster EKS '$CLUSTER_NAME' en la región $AWS_REGION."
+            echo "Revisa CLUSTER_NAME en el workflow o en Terraform."
+            exit 1
+          fi
+
+          echo "Cluster '$CLUSTER_NAME' encontrado."
+
       - name: Configurar kubeconfig
         run: |
           aws eks update-kubeconfig \
             --region $AWS_REGION \
             --name $CLUSTER_NAME
+          kubectl config set-context --current --namespace=$NAMESPACE
+
+      - name: Crear repositorios ECR si no existen
+        run: |
+          for REPO in ${PROJECT_NAME}-frontend ${PROJECT_NAME}-ventas ${PROJECT_NAME}-despachos; do
+            if ! aws ecr describe-repositories --repository-names "$REPO" >/dev/null 2>&1; then
+              echo "Creando repositorio ECR: $REPO"
+              aws ecr create-repository --repository-name "$REPO" >/dev/null
+            else
+              echo "Repositorio ECR ya existe: $REPO"
+            fi
+          done
 
       - name: Crear Secret
         run: |
@@ -71,7 +107,7 @@ jobs:
             MYSQL_PASSWORD: "${{ secrets.MYSQL_PASSWORD || 'Innovatech123!' }}"
           EOF
 
-          kubectl apply -f infra/k8s/secret.yml
+          kubectl apply -f infra/k8s/secret.yml -n $NAMESPACE
 
       - name: Esperar imágenes en ECR
         run: |
@@ -89,50 +125,84 @@ jobs:
           echo "No se encontraron las imágenes en ECR a tiempo."
           exit 1
 
+      - name: Generar manifests con imágenes ECR
+        run: |
+          mkdir -p /tmp/infra-k8s
+          python - <<'PY'
+# Reemplaza los placeholders de imagen en los manifests por las rutas completas de ECR antes de aplicar.
+import os
+from pathlib import Path
+
+replacements = {
+    'infra/k8s/frontend.yml': [('image: frontend', f'image: {os.environ["FRONTEND_ECR"]}:{os.environ["IMAGE_TAG"]}')],
+    'infra/k8s/backend-ventas.yml': [('image: back-ventas', f'image: {os.environ["VENTAS_ECR"]}:{os.environ["IMAGE_TAG"]}')],
+    'infra/k8s/backend-despachos.yml': [('image: back-despachos', f'image: {os.environ["DESPACHOS_ECR"]}:{os.environ["IMAGE_TAG"]}')],
+}
+for path, changes in replacements.items():
+    file_path = Path(path)
+    text = file_path.read_text()
+    for old, new in changes:
+        if old not in text:
+            raise SystemExit(f'No se encontró el marcador de imagen "{old}" en {path}')
+        text = text.replace(old, new)
+    out_path = Path('/tmp/infra-k8s') / file_path.name
+    out_path.write_text(text)
+PY
+
       - name: Aplicar manifiestos
         run: |
-          kubectl apply -f infra/k8s/mysql.yml
-          kubectl apply -f infra/k8s/backend-ventas.yml
-          kubectl apply -f infra/k8s/backend-despachos.yml
-          kubectl apply -f infra/k8s/frontend.yml
-          kubectl apply -f infra/k8s/hpa.yml
-          kubectl apply -f infra/k8s/ingress.yml
+          kubectl apply -f infra/k8s/mysql.yml -n $NAMESPACE
+          kubectl apply -f /tmp/infra-k8s/backend-ventas.yml -n $NAMESPACE
+          kubectl apply -f /tmp/infra-k8s/backend-despachos.yml -n $NAMESPACE
+          kubectl apply -f /tmp/infra-k8s/frontend.yml -n $NAMESPACE
+          kubectl apply -f infra/k8s/hpa.yml -n $NAMESPACE
+          kubectl apply -f infra/k8s/ingress.yml -n $NAMESPACE
 
-      - name: Actualizar imágenes
+      - name: Verificar AWS Load Balancer Controller
+        continue-on-error: true
         run: |
-          kubectl set image deployment/backend-ventas \
-            back-ventas=$VENTAS_ECR:${IMAGE_TAG}
-
-          kubectl set image deployment/backend-despachos \
-            back-despachos=$DESPACHOS_ECR:${IMAGE_TAG}
-
-          kubectl set image deployment/frontend-despacho \
-            frontend=$FRONTEND_ECR:${IMAGE_TAG}
+          echo "Comprobando AWS Load Balancer Controller..."
+          if kubectl get deployment -n kube-system aws-load-balancer-controller >/dev/null 2>&1; then
+            echo "AWS Load Balancer Controller detectado en kube-system."
+          elif kubectl get deployment --all-namespaces -l app.kubernetes.io/name=aws-load-balancer-controller >/dev/null 2>&1; then
+            echo "AWS Load Balancer Controller detectado en otro namespace."
+            kubectl get deployment --all-namespaces -l app.kubernetes.io/name=aws-load-balancer-controller
+          else
+            echo "⚠ No se detecta AWS Load Balancer Controller."
+            echo "Un Service tipo LoadBalancer puede quedarse en <pending> si no está instalado."
+            kubectl get pods --all-namespaces | grep -i 'alb\|load-balancer\|aws-load-balancer-controller' || true
+          fi
 
       - name: Esperar rollout
         continue-on-error: true
         run: |
           echo "Verificando rollout de los deployments..."
-          kubectl rollout status deployment/backend-ventas --timeout=300s || true
-          kubectl rollout status deployment/backend-despachos --timeout=300s || true
-          kubectl rollout status deployment/frontend-despacho --timeout=300s || true
+          kubectl rollout status deployment/backend-ventas --namespace $NAMESPACE --timeout=300s || true
+          kubectl rollout status deployment/backend-despachos --namespace $NAMESPACE --timeout=300s || true
+          kubectl rollout status deployment/frontend-despacho --namespace $NAMESPACE --timeout=300s || true
+
+      - name: Esperar que el frontend esté disponible
+        continue-on-error: true
+        run: |
+          echo "Esperando a que el deployment frontend-despacho alcance la condición available..."
+          kubectl wait --for=condition=available deployment/frontend-despacho --timeout=300s || true
 
       - name: Estado del clúster
         run: |
           echo "=== Pods ==="
-          kubectl get pods -o wide || true
+          kubectl get pods -n $NAMESPACE -o wide || true
           echo "=== Servicios ==="
-          kubectl get svc -o wide || true
+          kubectl get svc -n $NAMESPACE -o wide || true
           echo "=== HPA ==="
-          kubectl get hpa || true
+          kubectl get hpa -n $NAMESPACE || true
           echo "=== Describiendo backend-ventas ==="
-          kubectl describe deployment backend-ventas || true
+          kubectl describe deployment backend-ventas -n $NAMESPACE || true
           echo "=== Describiendo backend-despachos ==="
-          kubectl describe deployment backend-despachos || true
+          kubectl describe deployment backend-despachos -n $NAMESPACE || true
           echo "=== Describiendo frontend-despacho ==="
-          kubectl describe deployment frontend-despacho || true
+          kubectl describe deployment frontend-despacho -n $NAMESPACE || true
           echo "=== Eventos recientes ==="
-          kubectl get events --sort-by=.metadata.creationTimestamp || true
+          kubectl get events -n $NAMESPACE --sort-by=.metadata.creationTimestamp || true
 
       - name: Obtener URL del Frontend
         continue-on-error: true
@@ -140,10 +210,10 @@ jobs:
           echo "Esperando una URL pública para el frontend..."
 
           for i in {1..40}; do
-            INGRESS_HOST=$(kubectl get ingress frontend-despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
-            INGRESS_IP=$(kubectl get ingress frontend-despacho-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
-            SVC_HOST=$(kubectl get svc frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
-            SVC_IP=$(kubectl get svc frontend-despacho -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+            SVC_HOST=$(kubectl get svc frontend-despacho -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+            SVC_IP=$(kubectl get svc frontend-despacho -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+            INGRESS_HOST=$(kubectl get ingress frontend-despacho-ingress -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+            INGRESS_IP=$(kubectl get ingress frontend-despacho-ingress -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
 
             ENDPOINT="${INGRESS_HOST:-${INGRESS_IP:-${SVC_HOST:-$SVC_IP}}}"
 
@@ -161,8 +231,9 @@ jobs:
             sleep 15
           done
 
-          echo "⚠ No se obtuvo una URL pública aún. Revisa el estado del Ingress/Service:"
+          echo "⚠ No se obtuvo una URL pública aún. Revisa el estado del Service/Ingress y el AWS Load Balancer Controller:"
           kubectl get ingress frontend-despacho-ingress -o wide || true
           kubectl get svc frontend-despacho -o wide || true
           kubectl describe svc frontend-despacho || true
+          kubectl describe ingress frontend-despacho-ingress || true
           

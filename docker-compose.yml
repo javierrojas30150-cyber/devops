@@ -22,7 +22,7 @@ services:
       retries: 5
 
   backend-ventas:
-    build: ./back-Ventas_SpringBoot/Springboot-API-REST
+    build: ./backend/back-Ventas_SpringBoot/Springboot-API-REST
     image: ventas-backend:1.0
     ports:
       - "8080:8080"
@@ -43,13 +43,13 @@ services:
       mysql:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:8080/actuator/health || curl -f http://localhost:8080/"]
       interval: 30s
       timeout: 10s
       retries: 3
 
   backend-despacho:   # antes backend-despachos
-    build: ./back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
+    build: ./backend/back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
     image: despachos-backend:1.0
     ports:
       - "8081:8081"
@@ -70,13 +70,13 @@ services:
       mysql:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:8081/actuator/health || curl -f http://localhost:8081/"]
       interval: 30s
       timeout: 10s
       retries: 3
 
   frontend:
-    build: ./front_despacho
+    build: ./fronted/front_despacho
     image: despacho-frontend:1.0
     ports:
       - "3000:8080"
