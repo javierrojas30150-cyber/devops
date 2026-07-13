@@ -1,5 +1,5 @@
-# Etapa 1: Build con Maven y Java 17
-FROM maven:3.9.9-eclipse-temurin-17 AS builder
+# Etapa 1: Build con Maven y Java 25
+FROM maven:3.9.9-eclipse-temurin-25 AS builder
 WORKDIR /build
 # Copiar pom.xml primero para cachear dependencias
 COPY pom.xml .
@@ -10,7 +10,7 @@ COPY src ./src
 RUN mvn clean package -DskipTests
 
 # Etapa 2: Runtime con JRE slim
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 WORKDIR /app
 # Crear usuario no root
 RUN addgroup -S spring && adduser -S spring -G spring
