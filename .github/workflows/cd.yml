@@ -129,25 +129,25 @@ jobs:
         run: |
           mkdir -p /tmp/infra-k8s
           python - <<'PY'
-# Reemplaza los placeholders de imagen en los manifests por las rutas completas de ECR antes de aplicar.
-import os
-from pathlib import Path
+            # Reemplaza los placeholders de imagen en los manifests por las rutas completas de ECR antes de aplicar.
+            import os
+            from pathlib import Path
 
-replacements = {
-    'infra/k8s/frontend.yml': [('image: frontend', f'image: {os.environ["FRONTEND_ECR"]}:{os.environ["IMAGE_TAG"]}')],
-    'infra/k8s/backend-ventas.yml': [('image: back-ventas', f'image: {os.environ["VENTAS_ECR"]}:{os.environ["IMAGE_TAG"]}')],
-    'infra/k8s/backend-despachos.yml': [('image: back-despachos', f'image: {os.environ["DESPACHOS_ECR"]}:{os.environ["IMAGE_TAG"]}')],
-}
-for path, changes in replacements.items():
-    file_path = Path(path)
-    text = file_path.read_text()
-    for old, new in changes:
-        if old not in text:
-            raise SystemExit(f'No se encontró el marcador de imagen "{old}" en {path}')
-        text = text.replace(old, new)
-    out_path = Path('/tmp/infra-k8s') / file_path.name
-    out_path.write_text(text)
-PY
+            replacements = {
+                'infra/k8s/frontend.yml': [('image: frontend', f'image: {os.environ["FRONTEND_ECR"]}:{os.environ["IMAGE_TAG"]}')],
+                'infra/k8s/backend-ventas.yml': [('image: back-ventas', f'image: {os.environ["VENTAS_ECR"]}:{os.environ["IMAGE_TAG"]}')],
+                'infra/k8s/backend-despachos.yml': [('image: back-despachos', f'image: {os.environ["DESPACHOS_ECR"]}:{os.environ["IMAGE_TAG"]}')],
+            }
+            for path, changes in replacements.items():
+                file_path = Path(path)
+                text = file_path.read_text()
+                for old, new in changes:
+                    if old not in text:
+                        raise SystemExit(f'No se encontró el marcador de imagen "{old}" en {path}')
+                    text = text.replace(old, new)
+                out_path = Path('/tmp/infra-k8s') / file_path.name
+                out_path.write_text(text)
+          PY
 
       - name: Aplicar manifiestos
         run: |
