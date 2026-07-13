@@ -129,7 +129,6 @@ jobs:
         run: |
           mkdir -p /tmp/infra-k8s
           python - <<'PY'
-# Reemplaza los placeholders de imagen en los manifests por las rutas completas de ECR antes de aplicar.
 import os
 from pathlib import Path
 
