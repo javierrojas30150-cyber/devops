@@ -28,3 +28,8 @@ target/
 .gradle/
 build/
 *.jar
+
+# Local Docker run artifacts
+.docker-run-output.txt
+docker-backend-logs.txt
+docker-backend-logs-utf8.txt

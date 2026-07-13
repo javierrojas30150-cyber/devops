@@ -12,6 +12,8 @@ RUN mvn clean package -DskipTests
 # Etapa 2: Runtime con JRE slim
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
+# Instalar curl para las comprobaciones de salud
+RUN apk add --no-cache curl
 # Crear usuario no root
 RUN addgroup -S spring && adduser -S spring -G spring
 USER spring:spring
