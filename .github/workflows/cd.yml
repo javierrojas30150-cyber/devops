@@ -199,20 +199,23 @@ jobs:
           echo "=== Eventos recientes ==="
           kubectl get events -n $NAMESPACE --sort-by=.metadata.creationTimestamp || true
 
-      - name: Obtener URL del Frontend (LoadBalancer)
+      - name: Obtener URL del Frontend (Ingress ALB)
         continue-on-error: true
         run: |
-          echo "Buscando LoadBalancer para frontend-despacho..."
+          echo "Buscando hostname del Ingress frontend-despacho-ingress..."
           for i in $(seq 1 30); do
-            HOST=$(kubectl get service frontend-despacho -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+            HOST=$(kubectl get ingress frontend-despacho-ingress -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
             if [ -n "$HOST" ]; then
-              echo "Frontend LoadBalancer: $HOST"
+              echo "Frontend Ingress hostname: $HOST"
               exit 0
             fi
-            echo "Intento $i/30: LoadBalancer aún no disponible. Esperando 10s..."
+            echo "Intento $i/30: Ingress aún no tiene hostname. Esperando 10s..."
+            kubectl describe ingress frontend-despacho-ingress -n $NAMESPACE || true
             sleep 10
           done
-          echo "ERROR: No se obtuvo la URL del LoadBalancer para frontend-despacho después de 300s."
-          kubectl get svc frontend-despacho -n $NAMESPACE -o yaml || true
+          echo "ERROR: No se obtuvo la hostname del Ingress después de 300s."
+          kubectl get ingress frontend-despacho-ingress -n $NAMESPACE -o yaml || true
+          kubectl get svc -n $NAMESPACE -o wide || true
+          kubectl get events -n $NAMESPACE --sort-by=.metadata.creationTimestamp || true
           exit 1
           
